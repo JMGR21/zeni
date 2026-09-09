@@ -67,6 +67,16 @@ Modo Supervivencia (0–15) → Ki Dormido (16–35) → Ki Despertando (36–50
 
 Fórmula: `Ki = 0.35 × SaludActual + 0.35 × Momentum + 0.20 × Presupuesto + 0.10 × Constancia`. Salvaguarda: si hay balance negativo 2+ meses seguidos o pago mínimo no cubierto, el Ki se limita a máximo "Ki Dormido".
 
+## Sistema de diseño
+
+Tema oscuro, acento de color dinámico según el nivel de Ki actual (ver tabla de tokens en `globals.css`). Tipografía: Rajdhani (`--font-display`, headlines/números de Ki), IBM Plex Sans (`--font-sans`, UI general), IBM Plex Mono (`--font-mono`, montos y cifras tabulares).
+
+Tokens de texto/fondo: usar `ink` / `ink-muted` (NO `text-primary`/`text-muted`) — shadcn ya reserva `primary` internamente para botones/Card, así que esos nombres chocarían con sus componentes. Tokens de Ki: `ki-survival`, `ki-dormant`, `ki-awakening`, `ki-warrior`, `ki-saiyan`, `ki-saiyan2`.
+
+Componentes de marca (KiGauge, AuraIcon/AuraScene) son SVG hechos a mano, no librerías de charts — Tremor/Recharts se reservan para gráficas de datos reales (tendencias, comparativas), no para piezas de identidad visual. Un solo glow permitido en toda la UI: el arco del KiGauge. Iconografía estándar con lucide-react.
+
+**Concepto de Auth ("Scouter"):** el login/signup se piensa como un visor de poder tipo Dragon Ball — "escaneas tu ki" para entrar. Componentes: `scouter-hud.tsx` (radar, barrido, contador de PODER), `hud-frame.tsx` (marco tipo visor con línea de escaneo), `auth-mode-toggle.tsx` (pestañas login/signup). Copy temático en los formularios ("Bienvenido de vuelta, guerrero", "Verificando ki..."). Esta metáfora (escanear/medir poder) es el patrón a seguir para futuras pantallas de "entrada" o verificación en la app — no solo decoración, la metáfora debe ajustarse a la función real de la pantalla.
+
 ## Cosas a evitar
 
 - No agregar dependencias nuevas sin confirmarlo primero (proyecto personal, se prefiere mantener el stack acotado)
@@ -77,6 +87,6 @@ Fórmula: `Ki = 0.35 × SaludActual + 0.35 × Momentum + 0.20 × Presupuesto + 0
 
 ## Fase actual
 
-**Fase 1 — Fundamentos:** proyecto creado, Supabase Cloud configurado, cliente `@supabase/ssr` listo (`client.ts`, `server.ts`, `proxy.ts`). Supabase CLI vinculado al proyecto. Migración `init_schema` en curso (tablas `profiles` y `categories`, en inglés, con RLS). Siguiente paso: pantalla de registro/login (Auth) para cerrar la Fase 1.
+**Fase 1 — Fundamentos:** COMPLETA. Proyecto creado, Supabase Cloud configurado, cliente `@supabase/ssr` listo (`client.ts`, `server.ts`, `proxy.ts`). Supabase CLI vinculado, migración `init_schema` aplicada (tablas `profiles` y `categories` con RLS). Auth (login/signup) implementado con concepto "Scouter". Sistema de diseño base establecido (tokens de Ki, tipografía, KiGauge, AuraScene, DragonMotif, SphereOrb).
 
 Roadmap completo: Fundamentos → Registro/Dashboard → Presupuesto → Dragones → Ki → Nivel/Transformaciones → Pulido.
