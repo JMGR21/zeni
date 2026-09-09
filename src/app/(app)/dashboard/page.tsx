@@ -1,12 +1,22 @@
 import { User } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
+import { AddTransactionDialog, type TransactionCategory } from "@/components/add-transaction-dialog";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiGauge } from "@/components/ki-gauge";
 import { getKiLevel } from "@/lib/ki";
+import { createClient } from "@/lib/supabase/server";
 
-// Datos de ejemplo para maquetar el diseño; llegarán de Supabase en fases futuras.
+// El Ki todavía no se calcula (fase 5); este valor es de ejemplo para maquetar el hero.
 const EXAMPLE_KI_SCORE = 58;
-const EXAMPLE_MONTH = { income: 24000, expenses: 15300 };
+
+type RecentTransaction = {
+  id: string;
+  type: "income" | "expense";
+  amount: number;
+  description: string | null;
+  occurred_on: string;
+  categories: { name: string } | null;
+};
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -14,9 +24,43 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
 });
 
-export default function DashboardPage() {
+const dateFormatter = new Intl.DateTimeFormat("es-MX", {
+  day: "2-digit",
+  month: "short",
+});
+
+function monthRange(now: Date) {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const { start, end } = monthRange(new Date());
+
+  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }] =
+    await Promise.all([
+      supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
+      supabase
+        .from("transactions")
+        .select("id, type, amount, description, occurred_on, categories(name)")
+        .order("occurred_on", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<RecentTransaction[]>(),
+      supabase.from("categories").select("id, name, type").order("name").returns<TransactionCategory[]>(),
+    ]);
+
+  const income = (monthTransactions ?? [])
+    .filter((transaction) => transaction.type === "income")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const expenses = (monthTransactions ?? [])
+    .filter((transaction) => transaction.type === "expense")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const balance = income - expenses;
+
   const kiLevel = getKiLevel(EXAMPLE_KI_SCORE);
-  const balance = EXAMPLE_MONTH.income - EXAMPLE_MONTH.expenses;
 
   return (
     <div className="flex min-h-dvh flex-col bg-void text-ink">
@@ -55,13 +99,13 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between border-b border-ink-muted/10 pb-2">
               <dt className="text-sm text-ink-muted">Ingresos</dt>
               <dd className="font-mono text-sm text-ink">
-                {currencyFormatter.format(EXAMPLE_MONTH.income)}
+                {currencyFormatter.format(income)}
               </dd>
             </div>
             <div className="flex items-center justify-between border-b border-ink-muted/10 pb-2">
               <dt className="text-sm text-ink-muted">Gastos</dt>
               <dd className="font-mono text-sm text-ink">
-                {currencyFormatter.format(EXAMPLE_MONTH.expenses)}
+                {currencyFormatter.format(expenses)}
               </dd>
             </div>
             <div className="flex items-center justify-between pb-2">
@@ -97,15 +141,41 @@ export default function DashboardPage() {
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-ink-muted/10">
-              <td className="py-3 text-ink-muted">—</td>
-              <td className="py-3 text-ink-muted">—</td>
-              <td className="py-3 text-ink-muted">Sin movimientos todavía</td>
-              <td className="py-3 text-right text-ink-muted">—</td>
-            </tr>
+            {recentTransactions && recentTransactions.length > 0 ? (
+              recentTransactions.map((transaction) => (
+                <tr key={transaction.id} className="border-b border-ink-muted/10">
+                  <td className="py-3 text-ink-muted">
+                    {dateFormatter.format(new Date(`${transaction.occurred_on}T00:00:00`))}
+                  </td>
+                  <td className="py-3 text-ink-muted">
+                    {transaction.categories?.name ?? "Sin categoría"}
+                  </td>
+                  <td className="py-3 text-ink-muted">
+                    {transaction.description || "—"}
+                  </td>
+                  <td
+                    className={`py-3 text-right font-mono ${
+                      transaction.type === "income" ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {transaction.type === "income" ? "+" : "-"}
+                    {currencyFormatter.format(transaction.amount)}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr className="border-b border-ink-muted/10">
+                <td className="py-3 text-ink-muted">—</td>
+                <td className="py-3 text-ink-muted">—</td>
+                <td className="py-3 text-ink-muted">Sin movimientos todavía</td>
+                <td className="py-3 text-right text-ink-muted">—</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
+
+      <AddTransactionDialog categories={categories ?? []} />
     </div>
   );
 }
