@@ -77,6 +77,11 @@ Componentes de marca (KiGauge, AuraIcon/AuraScene) son SVG hechos a mano, no lib
 
 **Concepto de Auth ("Scouter"):** el login/signup se piensa como un visor de poder tipo Dragon Ball — "escaneas tu ki" para entrar. Componentes: `scouter-hud.tsx` (radar, barrido, contador de PODER), `hud-frame.tsx` (marco tipo visor con línea de escaneo), `auth-mode-toggle.tsx` (pestañas login/signup). Copy temático en los formularios ("Bienvenido de vuelta, guerrero", "Verificando ki..."). Esta metáfora (escanear/medir poder) es el patrón a seguir para futuras pantallas de "entrada" o verificación en la app — no solo decoración, la metáfora debe ajustarse a la función real de la pantalla.
 
+**Regla de consistencia visual (importante):** el diseño real del proyecto es el que vive en el código, no el que se describe en un prompt nuevo. Antes de construir cualquier UI nueva:
+1. Revisa los componentes y patrones ya existentes en `src/components/` y las pantallas ya implementadas — reutilízalos y sigue su estilo, no inventes un patrón visual distinto para la misma necesidad.
+2. Si en el proceso decides o el usuario pide un patrón visual nuevo (ej. el concepto "Scouter"), documéntalo brevemente en esta sección del `CLAUDE.md` al terminar, para que la siguiente sesión (de Claude Code o de este chat) parta del diseño real y no de una versión desactualizada.
+3. Los prompts que vienen de las sesiones de chat (fuera de Claude Code) especifican qué debe hacer la funcionalidad, no necesariamente el detalle visual exacto — si algo ahí choca con un patrón ya establecido en el código (colores, componentes, tono del copy), prioriza lo que ya existe en el proyecto y avisa del ajuste en el resumen final.
+
 ## Cosas a evitar
 
 - No agregar dependencias nuevas sin confirmarlo primero (proyecto personal, se prefiere mantener el stack acotado)
@@ -88,5 +93,7 @@ Componentes de marca (KiGauge, AuraIcon/AuraScene) son SVG hechos a mano, no lib
 ## Fase actual
 
 **Fase 1 — Fundamentos:** COMPLETA. Proyecto creado, Supabase Cloud configurado, cliente `@supabase/ssr` listo (`client.ts`, `server.ts`, `proxy.ts`). Supabase CLI vinculado, migración `init_schema` aplicada (tablas `profiles` y `categories` con RLS). Auth (login/signup) implementado con concepto "Scouter". Sistema de diseño base establecido (tokens de Ki, tipografía, KiGauge, AuraScene, DragonMotif, SphereOrb).
+
+**Fase 2 — Registro/Dashboard:** en curso. Tabla `transactions` + categorías por defecto vía trigger. Modal de registro rápido y dashboard con datos reales implementados y funcionando, con el diseño afinado directamente en Claude Code (no necesariamente idéntico a lo último descrito en el chat — el código es la fuente de verdad, ver regla de consistencia visual arriba).
 
 Roadmap completo: Fundamentos → Registro/Dashboard → Presupuesto → Dragones → Ki → Nivel/Transformaciones → Pulido.
