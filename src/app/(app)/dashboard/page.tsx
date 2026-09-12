@@ -3,8 +3,12 @@ import { AddTransactionDialog, type TransactionCategory } from "@/components/add
 import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiGauge } from "@/components/ki-gauge";
+import { LevelBadge } from "@/components/level-badge";
+import { TransformationOverlay } from "@/components/transformation-overlay";
 import { getKiLevel } from "@/lib/ki";
-import { calculateKi } from "@/lib/ki-engine";
+import { awardMonthlyXp, calculateKi } from "@/lib/ki-engine";
+import { getLevelFromXp } from "@/lib/level";
+import { getTotalXp } from "@/lib/grant-xp";
 import { createClient } from "@/lib/supabase/server";
 
 type RecentTransaction = {
@@ -55,6 +59,7 @@ export default async function DashboardPage() {
       user ? calculateKi(user.id) : Promise.resolve(null),
     ]);
 
+  let transformationJustHappened = false;
   if (user && kiResult) {
     await supabase.from("ki_scores").upsert(
       {
@@ -65,7 +70,12 @@ export default async function DashboardPage() {
       },
       { onConflict: "user_id,year_month" },
     );
+    const monthlyXp = await awardMonthlyXp(user.id, kiResult.level.label);
+    transformationJustHappened = monthlyXp.transformationJustHappened;
   }
+
+  const totalXp = user ? await getTotalXp(supabase, user.id) : 0;
+  const levelInfo = getLevelFromXp(totalXp);
 
   const income = (monthTransactions ?? [])
     .filter((transaction) => transaction.type === "income")
@@ -91,6 +101,15 @@ export default async function DashboardPage() {
           {currencyFormatter.format(balance)}
         </p>
         <p className="text-sm text-ink-muted">Saldo actual</p>
+
+        <div className="w-full max-w-xs">
+          <LevelBadge
+            level={levelInfo.level}
+            xpIntoLevel={levelInfo.xpIntoLevel}
+            xpForNextLevel={levelInfo.xpForNextLevel}
+            totalXp={totalXp}
+          />
+        </div>
       </section>
 
       <section className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-10 px-6 py-8 sm:grid-cols-2">
@@ -180,6 +199,11 @@ export default async function DashboardPage() {
       </section>
 
       <AddTransactionDialog categories={categories ?? []} />
+      <TransformationOverlay
+        active={transformationJustHappened}
+        levelLabel={kiLevel.label}
+        colorToken={kiLevel.colorToken}
+      />
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getInstitution } from "@/lib/institutions";
+import { getSphereProgress } from "@/lib/spheres";
+import { grantXp } from "@/lib/grant-xp";
 import { revalidatePath } from "next/cache";
 
 export type CreateDragonActionState = { error?: string; success?: boolean };
@@ -82,6 +84,8 @@ export async function contributeToDragon(
     .single<{ current_amount: number; target_amount: number }>();
   if (fetchError || !dragon) return { error: "No se encontró el dragón." };
 
+  const spheresBefore = getSphereProgress(dragon.current_amount, dragon.target_amount);
+
   const nextAmount = dragon.current_amount + amount;
 
   const { error } = await supabase
@@ -96,6 +100,15 @@ export async function contributeToDragon(
   if (error) return { error: error.message };
 
   await supabase.from("dragon_contributions").insert({ dragon_id: dragonId, user_id: user.id, amount });
+
+  const spheresAfter = getSphereProgress(nextAmount, dragon.target_amount);
+  const newlyCompletedIndexes = spheresAfter
+    .map((completed, index) => (completed && !spheresBefore[index] ? index : null))
+    .filter((index): index is number => index !== null);
+
+  for (const sphereIndex of newlyCompletedIndexes) {
+    await grantXp(supabase, user.id, "sphere_completed", 50, `sphere:${dragonId}:${sphereIndex}`);
+  }
 
   revalidatePath("/dragons");
   return { success: true };

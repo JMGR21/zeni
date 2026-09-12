@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { getSuggestedBudget, resolveBudgetedAmount, type BudgetCategory } from "@/lib/budget";
-import { getKiLevel, type KiLevel } from "@/lib/ki";
+import { getSuggestedBudget, resolveBudgetedAmount, wasMonthWithinBudget, type BudgetCategory } from "@/lib/budget";
+import { getKiLevel, getKiLevelRank, type KiLevel } from "@/lib/ki";
+import { grantXp } from "@/lib/grant-xp";
 import {
   computeConstancia,
   computeFinalScore,
@@ -217,4 +218,57 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const level = getKiLevel(score);
 
   return { score, level, breakdown, safeguardApplied };
+}
+
+/**
+ * Otorga los dos XP mensuales (mes cumplido en presupuesto y
+ * Transformación) al calcular el Ki de este mes. Debe llamarse justo
+ * después de que `ki_scores` ya tenga guardado el registro del mes en
+ * curso — la comparación de Transformación necesita el mes anterior, no el
+ * actual, así que solo lee `ki_scores`, no lo escribe.
+ */
+export async function awardMonthlyXp(
+  userId: string,
+  currentLevelLabel: string,
+  referenceDate: Date = new Date(),
+): Promise<{ transformationJustHappened: boolean }> {
+  const supabase = await createClient();
+
+  const currentMonthKey = toISODate(monthStart(referenceDate, 0));
+  const previousMonthStart = monthStart(referenceDate, 1);
+  const previousMonthKey = toISODate(previousMonthStart);
+
+  const budgetDedupeKey = `budget:${previousMonthKey}`;
+  const { data: existingBudgetEvent } = await supabase
+    .from("xp_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("dedupe_key", budgetDedupeKey)
+    .maybeSingle();
+
+  if (!existingBudgetEvent) {
+    const withinBudget = await wasMonthWithinBudget(supabase, userId, previousMonthStart);
+    if (withinBudget) {
+      await grantXp(supabase, userId, "budget_month", 100, budgetDedupeKey);
+    }
+  }
+
+  const { data: previousScore } = await supabase
+    .from("ki_scores")
+    .select("level_label")
+    .eq("user_id", userId)
+    .eq("year_month", previousMonthKey)
+    .maybeSingle<{ level_label: string }>();
+
+  let transformationJustHappened = false;
+  if (previousScore) {
+    const previousRank = getKiLevelRank(previousScore.level_label);
+    const currentRank = getKiLevelRank(currentLevelLabel);
+    if (previousRank !== null && currentRank !== null && currentRank > previousRank) {
+      await grantXp(supabase, userId, "transformation", 300, `transformation:${currentMonthKey}`);
+      transformationJustHappened = true;
+    }
+  }
+
+  return { transformationJustHappened };
 }

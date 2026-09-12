@@ -181,3 +181,18 @@
     top: 105%;
   }
 }
+
+/* Pulso de aura para la celebración de Transformación (fase 6). Única otra
+   animación de glow del proyecto, junto al arco del KiGauge — ver excepción
+   documentada en CLAUDE.md. */
+@keyframes transformation-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}

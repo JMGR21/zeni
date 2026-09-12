@@ -1,7 +1,10 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { grantXp } from "@/lib/grant-xp";
+import { getWeekDedupeKey, getWeekStart, getWeeklyXpTierAmount, resolveWeeklyXpAction, toISODateString } from "@/lib/weekly-xp";
 
 export type AddTransactionActionState = { error?: string; success?: boolean };
 
@@ -48,6 +51,46 @@ export async function addTransaction(
   });
   if (error) return { error: error.message };
 
+  await grantDailyAndWeeklyXp(supabase, user.id);
+
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+async function grantDailyAndWeeklyXp(supabase: SupabaseClient, userId: string): Promise<void> {
+  const now = new Date();
+
+  await grantXp(supabase, userId, "daily_activity", 10, toISODateString(now));
+
+  const weekStartDate = getWeekStart(now);
+  const weekStart = toISODateString(weekStartDate);
+  const weekEnd = toISODateString(
+    new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate() + 7),
+  );
+
+  const { data: weekRows } = await supabase
+    .from("transactions")
+    .select("occurred_on")
+    .eq("user_id", userId)
+    .gte("occurred_on", weekStart)
+    .lt("occurred_on", weekEnd);
+
+  const activeDays = new Set((weekRows ?? []).map((row) => row.occurred_on)).size;
+  const tierAmount = getWeeklyXpTierAmount(activeDays);
+  const dedupeKey = getWeekDedupeKey(now);
+
+  const { data: existing } = await supabase
+    .from("xp_events")
+    .select("id, amount")
+    .eq("user_id", userId)
+    .eq("dedupe_key", dedupeKey)
+    .maybeSingle();
+
+  const action = resolveWeeklyXpAction(existing?.amount ?? null, tierAmount);
+  if (action.kind === "insert") {
+    await grantXp(supabase, userId, "weekly_activity", action.amount, dedupeKey);
+  } else if (action.kind === "update" && existing) {
+    const { error: updateError } = await supabase.from("xp_events").update({ amount: action.amount }).eq("id", existing.id);
+    if (updateError) throw updateError;
+  }
 }
