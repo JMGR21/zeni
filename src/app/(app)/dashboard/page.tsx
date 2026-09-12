@@ -1,6 +1,5 @@
-import { User } from "lucide-react";
-import { signOut } from "@/app/(auth)/actions";
 import { AddTransactionDialog, type TransactionCategory } from "@/components/add-transaction-dialog";
+import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiGauge } from "@/components/ki-gauge";
 import { getKiLevel } from "@/lib/ki";
@@ -64,20 +63,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
-        <span className="font-display text-xl font-bold tracking-[0.2em]">
-          ZENI
-        </span>
-        <form action={signOut}>
-          <button
-            type="submit"
-            aria-label="Cerrar sesión"
-            className="flex size-9 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-          >
-            <User className="size-5" />
-          </button>
-        </form>
-      </header>
+      <AppHeader active="dashboard" />
 
       <section className="relative flex flex-col items-center gap-3 overflow-hidden px-6 py-16">
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
