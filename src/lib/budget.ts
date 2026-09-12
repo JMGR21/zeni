@@ -2,6 +2,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type SuggestedBudget = { available: true; amount: number } | { available: false };
 
+export type BudgetCategory = {
+  id: string;
+  name: string;
+  spent: number;
+  customAmount: number | null;
+  suggestion: SuggestedBudget;
+};
+
+// El monto que realmente aplica para una categoría: el override manual si
+// existe, si no la sugerencia calculada; `null` si no hay ninguno de los
+// dos todavía (necesita más historial).
+export function resolveBudgetedAmount(category: BudgetCategory): number | null {
+  return category.customAmount ?? (category.suggestion.available ? category.suggestion.amount : null);
+}
+
 const SUGGESTION_MONTHS = 3;
 
 function toISODate(date: Date) {

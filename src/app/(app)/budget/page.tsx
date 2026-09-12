@@ -1,6 +1,8 @@
+import { Dumbbell } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
-import { BudgetCategoryCard, type BudgetCategory } from "@/components/budget-category-card";
-import { getSuggestedBudget } from "@/lib/budget";
+import { BudgetCategoryCard } from "@/components/budget-category-card";
+import { BudgetSummary } from "@/components/budget-summary";
+import { getSuggestedBudget, type BudgetCategory } from "@/lib/budget";
 import { createClient } from "@/lib/supabase/server";
 
 function monthRange(now: Date) {
@@ -60,10 +62,19 @@ export default async function BudgetPage() {
       <AppHeader active="budget" />
 
       <section className="mx-auto w-full max-w-4xl px-6 py-10">
-        <h1 className="font-display text-3xl font-semibold text-ink">Presupuesto</h1>
+        <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
+          <Dumbbell className="size-3.5 text-ki-awakening" aria-hidden="true" />
+          Cámara de gravedad
+        </div>
+        <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Presupuesto</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Sugerido a partir de tu gasto real de los últimos 3 meses. Personaliza cualquier categoría cuando quieras.
+          Cada categoría entrena bajo su propio límite de gravedad, calculado a partir de tu gasto real de los
+          últimos 3 meses. Personaliza el límite cuando quieras.
         </p>
+
+        <div className="mt-8">
+          <BudgetSummary categories={budgetCategories} />
+        </div>
 
         <div className="mt-8">
           <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">

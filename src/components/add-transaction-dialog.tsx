@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { ChevronLeft, ChevronRight, Loader2, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "cn";
 import { addTransaction, type AddTransactionActionState } from "@/app/(app)/dashboard/actions";
+import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,7 +26,6 @@ type TransactionType = "income" | "expense";
 
 const STEP_LABELS = ["Tipo", "Monto", "Categoría", "Fecha", "Confirmar"] as const;
 const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
-const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 
 const initialState: AddTransactionActionState = {};
 
@@ -33,19 +33,6 @@ const summaryCurrencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
 });
-
-// Solo dígitos y un único punto decimal, máximo 2 decimales — así el valor
-// siempre es seguro de convertir con Number() sin importar si viene del
-// teclado físico o del teclado en pantalla.
-function sanitizeAmountInput(raw: string) {
-  let value = raw.replace(/[^0-9.]/g, "");
-  const firstDot = value.indexOf(".");
-  if (firstDot !== -1) {
-    value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replaceAll(".", "");
-  }
-  const [wholePart, decimalPart] = value.split(".");
-  return decimalPart === undefined ? wholePart : `${wholePart}.${decimalPart.slice(0, 2)}`;
-}
 
 function toISODate(date: Date) {
   const year = date.getFullYear();
@@ -156,44 +143,9 @@ function AmountStep({
 }) {
   const amount = Number(value || "0");
 
-  function pressKey(key: string) {
-    if (key === "⌫") {
-      onChange(value.slice(0, -1));
-      return;
-    }
-    if (key === "." && value.includes(".")) return;
-    onChange(sanitizeAmountInput(value + key));
-  }
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-center gap-1 py-2">
-        <span className="font-mono text-2xl text-ink-muted">$</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          autoFocus
-          value={value}
-          onChange={(event) => onChange(sanitizeAmountInput(event.target.value))}
-          placeholder="0.00"
-          className="w-40 border-none bg-transparent text-center font-mono text-4xl text-ink outline-none placeholder:text-ink-muted/40"
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        {KEYPAD_KEYS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => pressKey(key)}
-            className={cn(
-              "h-12 rounded-lg border border-ink-muted/10 bg-void/40 font-mono text-lg transition-colors active:scale-95",
-              key === "⌫" ? "text-ink-muted hover:border-ink-muted/30" : "text-ink hover:border-ki-awakening/40",
-            )}
-          >
-            {key}
-          </button>
-        ))}
-      </div>
+      <AmountKeypad value={value} onChange={onChange} autoFocus />
       <Button
         type="button"
         disabled={amount <= 0}
