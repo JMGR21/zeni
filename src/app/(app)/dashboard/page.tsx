@@ -4,10 +4,8 @@ import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiGauge } from "@/components/ki-gauge";
 import { getKiLevel } from "@/lib/ki";
+import { calculateKi } from "@/lib/ki-engine";
 import { createClient } from "@/lib/supabase/server";
-
-// El Ki todavía no se calcula (fase 5); este valor es de ejemplo para maquetar el hero.
-const EXAMPLE_KI_SCORE = 58;
 
 type RecentTransaction = {
   id: string;
@@ -39,7 +37,11 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { start, end } = monthRange(new Date());
 
-  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }] =
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }, kiResult] =
     await Promise.all([
       supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
       supabase
@@ -50,7 +52,20 @@ export default async function DashboardPage() {
         .limit(10)
         .returns<RecentTransaction[]>(),
       supabase.from("categories").select("id, name, type").order("name").returns<TransactionCategory[]>(),
+      user ? calculateKi(user.id) : Promise.resolve(null),
     ]);
+
+  if (user && kiResult) {
+    await supabase.from("ki_scores").upsert(
+      {
+        user_id: user.id,
+        year_month: start,
+        score: kiResult.score,
+        level_label: kiResult.level.label,
+      },
+      { onConflict: "user_id,year_month" },
+    );
+  }
 
   const income = (monthTransactions ?? [])
     .filter((transaction) => transaction.type === "income")
@@ -60,7 +75,8 @@ export default async function DashboardPage() {
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const balance = income - expenses;
 
-  const kiLevel = getKiLevel(EXAMPLE_KI_SCORE);
+  const kiScore = kiResult?.score ?? 0;
+  const kiLevel = getKiLevel(kiScore);
 
   return (
     <div className="flex min-h-dvh flex-col bg-void text-ink">
@@ -70,7 +86,7 @@ export default async function DashboardPage() {
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <AuraIcon color={`var(--color-${kiLevel.colorToken})`} size={380} />
         </div>
-        <KiGauge score={EXAMPLE_KI_SCORE} size={220} />
+        <KiGauge score={kiScore} size={220} />
         <p className="font-mono text-3xl text-ink">
           {currencyFormatter.format(balance)}
         </p>
