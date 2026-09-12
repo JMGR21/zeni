@@ -1,4 +1,4 @@
-import { Dumbbell } from "lucide-react";
+import { GiWeightLiftingUp } from "react-icons/gi";
 import { AppHeader } from "@/components/app-header";
 import { BudgetCategoryCard } from "@/components/budget-category-card";
 import { BudgetSummary } from "@/components/budget-summary";
@@ -63,7 +63,7 @@ export default async function BudgetPage() {
 
       <section className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
-          <Dumbbell className="size-3.5 text-ki-awakening" aria-hidden="true" />
+          <GiWeightLiftingUp className="size-3.5 text-ki-awakening" aria-hidden="true" />
           Cámara de gravedad
         </div>
         <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Presupuesto</h1>

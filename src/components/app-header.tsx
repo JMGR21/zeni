@@ -6,9 +6,10 @@ import { signOut } from "@/app/(auth)/actions";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/budget", label: "Presupuesto" },
+  { href: "/dragons", label: "Dragones" },
 ] as const;
 
-export function AppHeader({ active }: { active: "dashboard" | "budget" }) {
+export function AppHeader({ active }: { active: "dashboard" | "budget" | "dragons" }) {
   return (
     <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
       <div className="flex items-center gap-8">

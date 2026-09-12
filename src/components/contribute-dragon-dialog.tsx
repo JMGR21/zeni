@@ -2,16 +2,16 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, Pencil } from "lucide-react";
-import { GiWeightLiftingUp } from "react-icons/gi";
-import { setBudget, type BudgetActionState } from "@/app/(app)/budget/actions";
+import { Loader2 } from "lucide-react";
+import { GiFireBowl } from "react-icons/gi";
+import { contributeToDragon, type ContributeActionState } from "@/app/(app)/dragons/actions";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-const initialState: BudgetActionState = {};
+const initialState: ContributeActionState = {};
 
-function SaveButton() {
+function SaveButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <Button
@@ -25,63 +25,61 @@ function SaveButton() {
           Guardando...
         </>
       ) : (
-        "Guardar límite"
+        label
       )}
     </Button>
   );
 }
 
-export function EditBudgetDialog({
-  categoryId,
-  categoryName,
-  initialAmount,
+export function ContributeDragonDialog({
+  dragonId,
+  dragonName,
+  type,
 }: {
-  categoryId: string;
-  categoryName: string;
-  initialAmount: number | null;
+  dragonId: string;
+  dragonName: string;
+  type: "savings" | "debt";
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
-  const [state, formAction] = useActionState(setBudget, initialState);
+  const [state, formAction] = useActionState(contributeToDragon, initialState);
 
-  // Cierra el modal tras un guardado exitoso, sin usar un efecto: se detecta
-  // el cambio de `state` durante el render (patrón recomendado por React
-  // para ajustar estado en respuesta a otro estado).
   const [handledState, setHandledState] = useState(state);
   if (state !== handledState) {
     setHandledState(state);
     if (state.success) setOpen(false);
   }
 
+  const label = type === "savings" ? "Agregar abono" : "Registrar pago";
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) setAmount(initialAmount !== null ? initialAmount.toFixed(2) : "");
+        if (next) setAmount("");
       }}
     >
       <DialogTrigger
         render={
           <button
             type="button"
-            aria-label="Editar presupuesto"
-            className="flex size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
+            className="rounded-lg border border-ink-muted/15 bg-void/40 px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-ki-awakening/50 hover:bg-ki-awakening/5"
           />
         }
       >
-        <Pencil className="size-3.5" />
+        {label}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
-            <GiWeightLiftingUp className="size-3.5 text-ki-awakening" aria-hidden="true" />
-            Ajuste de gravedad
+            <GiFireBowl className="size-3.5 text-ki-awakening" aria-hidden="true" />
+            {label}
           </div>
-          <DialogTitle>{categoryName}</DialogTitle>
+          <DialogTitle>{dragonName}</DialogTitle>
         </DialogHeader>
         <form action={formAction} className="space-y-4">
-          <input type="hidden" name="category_id" value={categoryId} />
+          <input type="hidden" name="dragon_id" value={dragonId} />
           <input type="hidden" name="amount" value={amount} />
           <AmountKeypad value={amount} onChange={setAmount} autoFocus />
           {state.error && (
@@ -89,7 +87,7 @@ export function EditBudgetDialog({
               {state.error}
             </p>
           )}
-          <SaveButton />
+          <SaveButton label={label} />
         </form>
       </DialogContent>
     </Dialog>

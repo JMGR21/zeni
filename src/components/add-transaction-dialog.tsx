@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
 
 export type TransactionCategory = {
   id: string;
@@ -73,39 +74,6 @@ function SubmitButton() {
         "Guardar movimiento"
       )}
     </Button>
-  );
-}
-
-function StepProgress({
-  step,
-  maxReached,
-  onJump,
-}: {
-  step: number;
-  maxReached: number;
-  onJump: (step: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {STEP_LABELS.map((label, index) => {
-        const reached = index <= maxReached;
-        const active = index === step;
-        return (
-          <button
-            key={label}
-            type="button"
-            disabled={!reached}
-            onClick={() => onJump(index)}
-            aria-label={label}
-            aria-current={active ? "step" : undefined}
-            className={cn(
-              "h-1.5 flex-1 rounded-full transition-colors disabled:cursor-not-allowed",
-              active ? "bg-ki-awakening" : reached ? "bg-ki-awakening/40" : "bg-ink-muted/15",
-            )}
-          />
-        );
-      })}
-    </div>
   );
 }
 
@@ -262,20 +230,6 @@ function DateStep({ selected, onSelect }: { selected: Date; onSelect: (date: Dat
   );
 }
 
-function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-ink-muted">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-ink">{value}</span>
-        <button type="button" onClick={onEdit} className="text-xs text-ki-awakening hover:underline">
-          Editar
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function ReviewStep({
   type,
   amount,
@@ -296,10 +250,14 @@ function ReviewStep({
   return (
     <div className="space-y-4">
       <div className="space-y-2 rounded-lg border border-ink-muted/10 bg-void/40 p-3">
-        <SummaryRow label="Tipo" value={type === "income" ? "Ingreso" : "Gasto"} onEdit={() => onEditStep(0)} />
-        <SummaryRow label="Monto" value={summaryCurrencyFormatter.format(amount)} onEdit={() => onEditStep(1)} />
-        <SummaryRow label="Categoría" value={categoryName} onEdit={() => onEditStep(2)} />
-        <SummaryRow label="Fecha" value={dateLabel} onEdit={() => onEditStep(3)} />
+        <WizardSummaryRow label="Tipo" value={type === "income" ? "Ingreso" : "Gasto"} onEdit={() => onEditStep(0)} />
+        <WizardSummaryRow
+          label="Monto"
+          value={summaryCurrencyFormatter.format(amount)}
+          onEdit={() => onEditStep(1)}
+        />
+        <WizardSummaryRow label="Categoría" value={categoryName} onEdit={() => onEditStep(2)} />
+        <WizardSummaryRow label="Fecha" value={dateLabel} onEdit={() => onEditStep(3)} />
       </div>
       <Input
         name="description"
@@ -350,23 +308,9 @@ function TransactionWizard({
       <input type="hidden" name="category_id" value={categoryId ?? ""} />
       <input type="hidden" name="occurred_on" value={toISODate(date)} />
 
-      <StepProgress step={step} maxReached={maxReached} onJump={goTo} />
+      <WizardProgress steps={STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
 
-      <div className="flex items-center gap-2">
-        {step > 0 && (
-          <button
-            type="button"
-            aria-label="Atrás"
-            onClick={() => goTo(step - 1)}
-            className="flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-        )}
-        <span className="text-xs font-medium tracking-widest text-ink-muted uppercase">
-          {STEP_LABELS[step]}
-        </span>
-      </div>
+      <WizardStepHeader label={STEP_LABELS[step]} step={step} onBack={() => goTo(step - 1)} />
 
       <div key={step} className="animate-in fade-in-0 slide-in-from-right-2 duration-200">
         {step === 0 && (

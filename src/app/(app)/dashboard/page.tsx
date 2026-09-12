@@ -1,3 +1,4 @@
+import { GiDragonHead } from "react-icons/gi";
 import { AddTransactionDialog, type TransactionCategory } from "@/components/add-transaction-dialog";
 import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
@@ -104,7 +105,8 @@ export default async function DashboardPage() {
         </div>
 
         <div>
-          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+          <h2 className="flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+            <GiDragonHead className="size-3.5 text-ki-awakening" aria-hidden="true" />
             Dragones activos
           </h2>
           <p className="mt-4 text-sm text-ink-muted">
