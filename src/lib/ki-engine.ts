@@ -265,8 +265,8 @@ export async function awardMonthlyXp(
     const previousRank = getKiLevelRank(previousScore.level_label);
     const currentRank = getKiLevelRank(currentLevelLabel);
     if (previousRank !== null && currentRank !== null && currentRank > previousRank) {
-      await grantXp(supabase, userId, "transformation", 300, `transformation:${currentMonthKey}`);
-      transformationJustHappened = true;
+      const { granted } = await grantXp(supabase, userId, "transformation", 300, `transformation:${currentMonthKey}`);
+      transformationJustHappened = granted;
     }
   }
 
