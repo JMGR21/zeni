@@ -47,7 +47,7 @@ export function Calendar({
   const monthLabel = viewDate.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 
   return (
-    <div className={cn("w-72 space-y-3", className)}>
+    <div className={cn("w-full space-y-3", className)}>
       {showShortcuts && (
         <div className="flex gap-2">
           <button
@@ -85,14 +85,14 @@ export function Calendar({
           <ChevronRight className="size-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 justify-items-center gap-1.5 text-center font-mono text-[11px] text-ink-muted">
+      <div className="grid grid-cols-7 justify-items-center gap-1 text-center font-mono text-[11px] text-ink-muted">
         {WEEKDAY_LABELS.map((label, index) => (
           <span key={index} className="flex h-6 items-center justify-center">
             {label}
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 justify-items-center gap-1.5">
+      <div className="grid grid-cols-7 justify-items-center gap-1">
         {cells.map((date, index) => {
           if (!date) return <span key={index} />;
           const active = selected ? isSameDay(date, selected) : false;

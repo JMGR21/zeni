@@ -42,6 +42,7 @@ export function ContributeDragonDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
+  const [skipTransaction, setSkipTransaction] = useState(false);
   const [state, formAction] = useActionState(contributeToDragon, initialState);
 
   const [handledState, setHandledState] = useState(state);
@@ -57,7 +58,10 @@ export function ContributeDragonDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) setAmount("");
+        if (next) {
+          setAmount("");
+          setSkipTransaction(false);
+        }
       }}
     >
       <DialogTrigger
@@ -80,8 +84,20 @@ export function ContributeDragonDialog({
         </DialogHeader>
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="dragon_id" value={dragonId} />
+          <input type="hidden" name="dragon_name" value={dragonName} />
+          <input type="hidden" name="dragon_type" value={type} />
           <input type="hidden" name="amount" value={amount} />
           <AmountKeypad value={amount} onChange={setAmount} autoFocus />
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            <input
+              type="checkbox"
+              name="skip_transaction"
+              checked={skipTransaction}
+              onChange={(event) => setSkipTransaction(event.target.checked)}
+              className="size-4 rounded border-ink-muted/30 bg-void/40 accent-ki-awakening"
+            />
+            No registrar como movimiento
+          </label>
           {state.error && (
             <p className="text-sm text-destructive" role="alert">
               {state.error}

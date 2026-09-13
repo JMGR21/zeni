@@ -1,8 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { applyDragonContribution } from "@/lib/apply-dragon-contribution";
+import { syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { getInstitution } from "@/lib/institutions";
+import { toISODateString } from "@/lib/weekly-xp";
 import { revalidatePath } from "next/cache";
 
 export type CreateDragonActionState = { error?: string; success?: boolean };
@@ -136,13 +137,45 @@ export async function contributeToDragon(
     return { error: "Ingresa un monto válido." };
   }
 
+  const dragonName = getField(formData, "dragon_name");
+  const dragonType = getField(formData, "dragon_type");
+  const skipTransaction = formData.get("skip_transaction") === "on";
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
-  const result = await applyDragonContribution(supabase, user.id, dragonId, amount);
+  let transactionId: string | null = null;
+  if (!skipTransaction) {
+    const description = dragonType === "debt" ? `Pago a ${dragonName}` : `Abono a ${dragonName}`;
+    const { data: transaction, error: insertError } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        type: "expense",
+        amount,
+        category_id: null,
+        description,
+        occurred_on: toISODateString(new Date()),
+        dragon_id: dragonId,
+      })
+      .select("id")
+      .single<{ id: string }>();
+    if (insertError || !transaction) return { error: insertError?.message ?? "No se pudo registrar el movimiento." };
+    transactionId = transaction.id;
+    revalidatePath("/transactions");
+    revalidatePath("/dashboard");
+  }
+
+  const result = await syncDragonLinkForTransaction(supabase, user.id, {
+    transactionId,
+    dragonId,
+    amount,
+    previousDragonId: null,
+    previousAmount: 0,
+  });
   if (result.error) return { error: result.error };
 
   revalidatePath("/dragons");

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "cn";
-import type { DragonOption, TransactionCategory } from "@/components/add-transaction-dialog";
+import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
 import { AppHeader } from "@/components/app-header";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransactionsFilters } from "@/components/transactions-filters";
@@ -129,6 +129,8 @@ export default async function TransactionsPage({
           </div>
         )}
       </section>
+
+      <AddTransactionDialog categories={categories ?? []} dragons={dragons ?? []} />
     </div>
   );
 }

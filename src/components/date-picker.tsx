@@ -48,6 +48,7 @@ export function DatePicker({
                 onChange(date);
                 setOpen(false);
               }}
+              className="w-72"
             />
           )}
         </PopoverContent>

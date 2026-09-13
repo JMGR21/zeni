@@ -3,7 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { applyDragonContribution } from "@/lib/apply-dragon-contribution";
+import { revertDragonLinkForTransaction, syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { grantXp } from "@/lib/grant-xp";
 import { getWeekDedupeKey, getWeekStart, getWeeklyXpTierAmount, resolveWeeklyXpAction, toISODateString } from "@/lib/weekly-xp";
 
@@ -43,20 +43,30 @@ export async function addTransaction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
-  const { error } = await supabase.from("transactions").insert({
-    user_id: user.id,
-    category_id: categoryId || null,
-    type,
-    amount,
-    description: description || null,
-    occurred_on: occurredOn,
-    dragon_id: dragonId || null,
-  });
-  if (error) return { error: error.message };
+  const { data: inserted, error } = await supabase
+    .from("transactions")
+    .insert({
+      user_id: user.id,
+      category_id: categoryId || null,
+      type,
+      amount,
+      description: description || null,
+      occurred_on: occurredOn,
+      dragon_id: dragonId || null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !inserted) return { error: error?.message ?? "No se pudo registrar el movimiento." };
 
   if (dragonId) {
-    const contributionResult = await applyDragonContribution(supabase, user.id, dragonId, amount);
-    if (contributionResult.error) return { error: contributionResult.error };
+    const syncResult = await syncDragonLinkForTransaction(supabase, user.id, {
+      transactionId: inserted.id,
+      dragonId,
+      amount,
+      previousDragonId: null,
+      previousAmount: 0,
+    });
+    if (syncResult.error) return { error: syncResult.error };
     revalidatePath("/dragons");
   }
 
@@ -103,10 +113,10 @@ export async function updateTransaction(
 
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
-    .select("dragon_id")
+    .select("dragon_id, amount")
     .eq("id", id)
     .eq("user_id", user.id)
-    .single<{ dragon_id: string | null }>();
+    .single<{ dragon_id: string | null; amount: number }>();
   if (fetchError || !existing) return { error: "No se encontró el movimiento." };
 
   const { error } = await supabase
@@ -123,16 +133,15 @@ export async function updateTransaction(
     .eq("user_id", user.id);
   if (error) return { error: error.message };
 
-  // El abono a un Dragón solo se aplica cuando el vínculo pasa de "sin
-  // Dragón" a "con Dragón" en esta edición. Cambiar de Dragón o
-  // desvincular uno que ya tenía un abono aplicado NO revierte ni reaplica
-  // ese abono histórico — es una simplificación intencional para evitar
-  // lógica de reversión (ver resumen de Fase 7 pieza 7 en CLAUDE.md).
-  if (dragonId && !existing.dragon_id) {
-    const contributionResult = await applyDragonContribution(supabase, user.id, dragonId, amount);
-    if (contributionResult.error) return { error: contributionResult.error };
-    revalidatePath("/dragons");
-  }
+  const syncResult = await syncDragonLinkForTransaction(supabase, user.id, {
+    transactionId: id,
+    dragonId: dragonId || null,
+    amount,
+    previousDragonId: existing.dragon_id,
+    previousAmount: Number(existing.amount),
+  });
+  if (syncResult.error) return { error: syncResult.error };
+  if (existing.dragon_id || dragonId) revalidatePath("/dragons");
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
@@ -154,10 +163,15 @@ export async function deleteTransaction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
+  const revertResult = await revertDragonLinkForTransaction(supabase, user.id, id);
+  if (revertResult.error) return { error: revertResult.error };
+
   const { error } = await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/dragons");
   return { success: true };
 }
 
