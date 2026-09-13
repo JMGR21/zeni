@@ -1,4 +1,3 @@
-import { AppHeader } from "@/components/app-header";
 import { CategoryGroup, type CategoryRow } from "@/components/category-list";
 import { CreateCategoryDialog } from "@/components/create-category-dialog";
 import { createClient } from "@/lib/supabase/server";
@@ -22,25 +21,23 @@ export default async function CategoriesPage() {
   const expenseCategories = sortCategories((categories ?? []).filter((category) => category.type === "expense"));
 
   return (
-    <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <AppHeader active="categories" />
-
-      <section className="mx-auto w-full max-w-4xl px-6 py-10">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-semibold text-ink">Categorías</h1>
-            <p className="mt-1 text-sm text-ink-muted">
-              Crea las tuyas o desactiva las que no uses — desactivarlas no borra su historial.
-            </p>
-          </div>
-          <CreateCategoryDialog />
+    <section className="mx-auto w-full max-w-4xl px-6 py-10">
+      {/* En 375px el título + descripción y el botón compiten por espacio en
+          una sola fila — se apilan por debajo de sm (ver auditoría responsive). */}
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-ink">Categorías</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Crea las tuyas o desactiva las que no uses — desactivarlas no borra su historial.
+          </p>
         </div>
+        <CreateCategoryDialog />
+      </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2">
-          <CategoryGroup title="Ingresos" categories={incomeCategories} />
-          <CategoryGroup title="Gastos" categories={expenseCategories} />
-        </div>
-      </section>
-    </div>
+      <div className="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2">
+        <CategoryGroup title="Ingresos" categories={incomeCategories} />
+        <CategoryGroup title="Gastos" categories={expenseCategories} />
+      </div>
+    </section>
   );
 }

@@ -101,6 +101,7 @@ function NameStep({
     <div className="space-y-4">
       <Input
         autoFocus
+        aria-label={type === "savings" ? "Nombre del Dragón de ahorro" : "Nombre del Dragón de deuda"}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={type === "savings" ? "Ej. Fondo de emergencia" : "Ej. Tarjeta de crédito"}
@@ -135,7 +136,12 @@ function TargetAmountStep({
       <p className="text-center text-xs text-ink-muted">
         {type === "savings" ? "Meta a alcanzar" : "Saldo original de la deuda"}
       </p>
-      <AmountKeypad value={value} onChange={onChange} autoFocus />
+      <AmountKeypad
+        value={value}
+        onChange={onChange}
+        autoFocus
+        ariaLabel={type === "savings" ? "Meta a alcanzar" : "Saldo original de la deuda"}
+      />
       <Button
         type="button"
         disabled={amount <= 0}
@@ -164,7 +170,12 @@ function InitialAmountStep({
       <p className="text-center text-xs text-ink-muted">
         {type === "savings" ? "Monto inicial (opcional)" : "Ya pagado hasta ahora (opcional)"}
       </p>
-      <AmountKeypad value={value} onChange={onChange} autoFocus />
+      <AmountKeypad
+        value={value}
+        onChange={onChange}
+        autoFocus
+        ariaLabel={type === "savings" ? "Monto inicial" : "Ya pagado hasta ahora"}
+      />
       <Button
         type="button"
         onClick={onNext}

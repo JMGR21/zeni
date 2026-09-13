@@ -70,13 +70,16 @@ function CreateCategoryForm({ onSuccess }: { onSuccess: () => void }) {
       <Input
         name="name"
         autoFocus
+        aria-label="Nombre de la categoría"
+        aria-invalid={Boolean(state.error)}
+        aria-describedby={state.error ? "category-name-error" : undefined}
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Nombre de la categoría"
         className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
       />
       {state.error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p id="category-name-error" className="text-sm text-destructive" role="alert">
           {state.error}
         </p>
       )}

@@ -119,7 +119,7 @@ function AmountStep({
 
   return (
     <div className="space-y-4">
-      <AmountKeypad value={value} onChange={onChange} autoFocus />
+      <AmountKeypad value={value} onChange={onChange} autoFocus ariaLabel="Monto del movimiento" />
       <Button
         type="button"
         disabled={amount <= 0}
@@ -207,6 +207,7 @@ function ReviewStep({
       </div>
       <Input
         name="description"
+        aria-label="Nota (opcional)"
         placeholder="Nota (opcional)"
         defaultValue={description}
         className="h-9 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
@@ -220,7 +221,7 @@ function ReviewStep({
             value={dragonId ?? NO_DRAGON}
             onValueChange={(next) => onDragonChange(next && next !== NO_DRAGON ? next : null)}
           >
-            <SelectTrigger className="h-10 w-full">
+            <SelectTrigger aria-label="¿Este pago va a un Dragón?" className="h-10 w-full">
               <SelectValue placeholder="Ninguno">
                 {(value: string) =>
                   value === NO_DRAGON ? "Ninguno" : (dragons.find((dragon) => dragon.id === value)?.name ?? "Ninguno")

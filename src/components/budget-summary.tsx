@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { cn } from "cn";
 import { resolveBudgetedAmount, type BudgetCategory } from "@/lib/budget";
 
@@ -53,6 +54,12 @@ export function BudgetSummary({ categories }: { categories: BudgetCategory[] }) 
               style={{ width: `${Math.min(percentUsed, 100)}%` }}
             />
           </div>
+          {overBudget && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-ki-survival">
+              <TriangleAlert className="size-3.5" aria-hidden="true" />
+              Presupuesto total excedido
+            </p>
+          )}
 
           <div className="mt-5 grid grid-cols-3 gap-3 text-center">
             <div>

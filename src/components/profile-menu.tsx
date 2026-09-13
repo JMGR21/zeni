@@ -2,6 +2,7 @@
 
 import { LogOut, Settings } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "cn";
 import { signOut } from "@/app/(auth)/actions";
 import { AvatarImage } from "@/components/avatar-image";
@@ -12,7 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function ProfileMenu({ active = false, avatarId = null }: { active?: boolean; avatarId?: string | null }) {
+export function ProfileMenu({ avatarId = null }: { avatarId?: string | null }) {
+  const pathname = usePathname();
+  const active = pathname.startsWith("/settings");
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

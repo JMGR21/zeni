@@ -87,7 +87,7 @@ export function ContributeDragonDialog({
           <input type="hidden" name="dragon_name" value={dragonName} />
           <input type="hidden" name="dragon_type" value={type} />
           <input type="hidden" name="amount" value={amount} />
-          <AmountKeypad value={amount} onChange={setAmount} autoFocus />
+          <AmountKeypad value={amount} onChange={setAmount} autoFocus ariaLabel={label} />
           <label className="flex items-center gap-2 text-xs text-ink-muted">
             <input
               type="checkbox"

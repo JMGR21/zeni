@@ -18,7 +18,7 @@
   --color-surface: #151824;
   --color-ink: #edeff4;
   --color-ink-muted: #7d8296;
-  --color-ki-survival: #e23b3b;
+  --color-ki-survival: #e24646; /* ligeramente más claro que el rojo original (#e23b3b) — como texto sobre bg-void el original quedaba en ~4.55:1, al límite de WCAG AA (4.5:1); este tono da más margen sin cambiar el tono de "alerta roja" */
   --color-ki-dormant: #6b7280;
   --color-ki-awakening: #f0a93a;
   --color-ki-warrior: #ff7a3d;

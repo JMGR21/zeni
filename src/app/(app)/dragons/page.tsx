@@ -1,5 +1,4 @@
 import { GiDragonHead } from "react-icons/gi";
-import { AppHeader } from "@/components/app-header";
 import { CreateDragonDialog } from "@/components/create-dragon-dialog";
 import { DebtStrategyComparison } from "@/components/debt-strategy-comparison";
 import { DragonCard, type Dragon } from "@/components/dragon-card";
@@ -68,9 +67,7 @@ export default async function DragonsPage() {
   const completedDragons = (dragons ?? []).filter((dragon) => dragon.status === "completed");
 
   return (
-    <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <AppHeader active="dragons" />
-
+    <>
       <section className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
           <GiDragonHead className="size-3.5 text-ki-awakening" aria-hidden="true" />
@@ -132,6 +129,6 @@ export default async function DragonsPage() {
       </section>
 
       <CreateDragonDialog />
-    </div>
+    </>
   );
 }

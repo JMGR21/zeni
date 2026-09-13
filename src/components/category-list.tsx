@@ -21,6 +21,7 @@ function CategoryRowItem({ category }: { category: CategoryRow }) {
       <Switch
         checked={category.active}
         disabled={isPending}
+        aria-label={`${category.active ? "Desactivar" : "Activar"} categoría ${category.name}`}
         onCheckedChange={(checked) => startTransition(() => toggleCategoryActive(category.id, checked))}
       />
     </div>

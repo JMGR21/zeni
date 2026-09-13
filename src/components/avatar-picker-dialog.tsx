@@ -38,7 +38,11 @@ export function AvatarPickerDialog({ avatarId }: { avatarId: string | null }) {
           <div className="font-mono text-xs tracking-widest text-ink-muted uppercase">Avatar</div>
           <DialogTitle>Elige tu personaje</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-4 gap-4 py-1 sm:grid-cols-5">
+        {/* grid-cols-4 con avatares de 72px fijos no cabe en el ancho del
+            diálogo a 375px (4×72 + gaps > espacio disponible) — 3 columnas
+            por debajo de sm, 4/5 sin cambios desde sm+ (ver auditoría
+            responsive). */}
+        <div className="grid grid-cols-3 gap-3 py-1 sm:grid-cols-5 sm:gap-4">
           {AVATARS.map((avatar) => {
             const selected = avatar.id === avatarId;
             return (

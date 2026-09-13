@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { GiDragonHead } from "react-icons/gi";
 import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
-import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
+import { KiEvolutionChart, type KiScorePoint } from "@/components/ki-evolution-chart";
 import { KiGauge } from "@/components/ki-gauge";
 import { LevelBadge } from "@/components/level-badge";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransformationOverlay } from "@/components/transformation-overlay";
-import { getKiLevel } from "@/lib/ki";
+import { getKiLevel, getKiProgressToNextLevel } from "@/lib/ki";
 import { awardMonthlyXp, calculateKi } from "@/lib/ki-engine";
 import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
@@ -33,25 +33,32 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }, { data: dragons }, kiResult] =
-    await Promise.all([
-      supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
-      supabase
-        .from("transactions")
-        .select("id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)")
-        .order("occurred_on", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(10)
-        .returns<RecentTransaction[]>(),
-      supabase
-        .from("categories")
-        .select("id, name, type")
-        .eq("active", true)
-        .order("name")
-        .returns<TransactionCategory[]>(),
-      supabase.from("dragons").select("id, name").eq("status", "active").order("name").returns<DragonOption[]>(),
-      user ? calculateKi(user.id) : Promise.resolve(null),
-    ]);
+  const [
+    { data: monthTransactions },
+    { data: recentTransactions },
+    { data: categories },
+    { data: dragons },
+    kiResult,
+    { data: kiHistory },
+  ] = await Promise.all([
+    supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
+    supabase
+      .from("transactions")
+      .select("id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)")
+      .order("occurred_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .returns<RecentTransaction[]>(),
+    supabase
+      .from("categories")
+      .select("id, name, type")
+      .eq("active", true)
+      .order("name")
+      .returns<TransactionCategory[]>(),
+    supabase.from("dragons").select("id, name").eq("status", "active").order("name").returns<DragonOption[]>(),
+    user ? calculateKi(user.id) : Promise.resolve(null),
+    supabase.from("ki_scores").select("year_month, score").order("year_month", { ascending: true }).returns<KiScorePoint[]>(),
+  ]);
 
   let transformationJustHappened = false;
   if (user && kiResult) {
@@ -81,16 +88,20 @@ export default async function DashboardPage() {
 
   const kiScore = kiResult?.score ?? 0;
   const kiLevel = getKiLevel(kiScore);
+  const kiProgress = getKiProgressToNextLevel(kiScore);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <AppHeader active="dashboard" />
-
+    <>
       <section className="relative flex flex-col items-center gap-3 overflow-hidden px-6 py-16">
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <AuraIcon color={`var(--color-${kiLevel.colorToken})`} size={380} />
         </div>
         <KiGauge score={kiScore} size={220} />
+        <p className="text-sm text-ink-muted">
+          {kiProgress.atMaxLevel
+            ? "Nivel máximo de Ki alcanzado"
+            : `Te faltan ${kiProgress.pointsNeeded} puntos para ${kiProgress.nextLevel.label}`}
+        </p>
         <p className="font-mono text-3xl text-ink">
           {currencyFormatter.format(balance)}
         </p>
@@ -160,12 +171,16 @@ export default async function DashboardPage() {
         />
       </section>
 
+      <section className="mx-auto w-full max-w-4xl px-6 pb-16">
+        <KiEvolutionChart points={kiHistory ?? []} />
+      </section>
+
       <AddTransactionDialog categories={categories ?? []} dragons={dragons ?? []} />
       <TransformationOverlay
         active={transformationJustHappened}
         levelLabel={kiLevel.label}
         colorToken={kiLevel.colorToken}
       />
-    </div>
+    </>
   );
 }

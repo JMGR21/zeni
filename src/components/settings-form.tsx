@@ -50,8 +50,11 @@ export function SettingsForm({
       <input type="hidden" name="currency" value={currency} />
 
       <div className="space-y-1.5">
-        <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Nombre</label>
+        <label htmlFor="settings-name" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+          Nombre
+        </label>
         <Input
+          id="settings-name"
           name="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -63,7 +66,7 @@ export function SettingsForm({
       <div className="space-y-1.5">
         <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Moneda</label>
         <Select value={currency} onValueChange={(next) => setCurrency(next ?? "MXN")}>
-          <SelectTrigger className="h-11 w-full">
+          <SelectTrigger aria-label="Moneda" className="h-11 w-full">
             <SelectValue>{(value: string) => CURRENCY_LABELS[value] ?? value}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -72,7 +75,11 @@ export function SettingsForm({
         </Select>
       </div>
 
-      {state.success && <p className="text-sm text-ki-awakening">Cambios guardados.</p>}
+      {state.success && (
+        <p className="text-sm text-ki-awakening" role="status">
+          Cambios guardados.
+        </p>
+      )}
       {state.error && (
         <p className="text-sm text-destructive" role="alert">
           {state.error}

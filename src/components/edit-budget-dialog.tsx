@@ -83,7 +83,7 @@ export function EditBudgetDialog({
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="category_id" value={categoryId} />
           <input type="hidden" name="amount" value={amount} />
-          <AmountKeypad value={amount} onChange={setAmount} autoFocus />
+          <AmountKeypad value={amount} onChange={setAmount} autoFocus ariaLabel={`Límite de presupuesto para ${categoryName}`} />
           {state.error && (
             <p className="text-sm text-destructive" role="alert">
               {state.error}

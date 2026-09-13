@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "cn";
 import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
-import { AppHeader } from "@/components/app-header";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransactionsFilters } from "@/components/transactions-filters";
 import { createClient } from "@/lib/supabase/server";
@@ -32,6 +31,7 @@ export default async function TransactionsPage({
   const categoryId = firstParam(params.category);
   const from = firstParam(params.from);
   const to = firstParam(params.to);
+  const q = firstParam(params.q)?.trim();
   const page = parsePage(params.page);
 
   let query = supabase
@@ -47,6 +47,7 @@ export default async function TransactionsPage({
   if (categoryId) query = query.eq("category_id", categoryId);
   if (from) query = query.gte("occurred_on", from);
   if (to) query = query.lte("occurred_on", to);
+  if (q) query = query.ilike("description", `%${q.replace(/[%_]/g, (match) => `\\${match}`)}%`);
 
   const rangeStart = (page - 1) * PAGE_SIZE;
   const rangeEnd = rangeStart + PAGE_SIZE - 1;
@@ -63,7 +64,7 @@ export default async function TransactionsPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  const hasFilters = Boolean(type || categoryId || from || to);
+  const hasFilters = Boolean(type || categoryId || from || to || q);
 
   function pageHref(nextPage: number) {
     const search = new URLSearchParams();
@@ -71,15 +72,14 @@ export default async function TransactionsPage({
     if (categoryId) search.set("category", categoryId);
     if (from) search.set("from", from);
     if (to) search.set("to", to);
+    if (q) search.set("q", q);
     if (nextPage > 1) search.set("page", String(nextPage));
     const query = search.toString();
     return query ? `/transactions?${query}` : "/transactions";
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <AppHeader active="transactions" />
-
+    <>
       <section className="mx-auto w-full max-w-4xl px-6 py-10">
         <h1 className="font-display text-3xl font-semibold text-ink">Movimientos</h1>
         <p className="mt-1 text-sm text-ink-muted">Historial completo de ingresos y gastos.</p>
@@ -131,6 +131,6 @@ export default async function TransactionsPage({
       </section>
 
       <AddTransactionDialog categories={categories ?? []} dragons={dragons ?? []} />
-    </div>
+    </>
   );
 }

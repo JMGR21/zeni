@@ -92,6 +92,7 @@ function ExtraPaymentSimulator({
         <span className="font-mono text-xs text-ink-muted">$0</span>
         <input
           type="range"
+          aria-label="Simular pago extra mensual"
           min={0}
           max={Math.max(pendingBalance, savedExtraPayment * 4, 1000)}
           step={50}
@@ -150,7 +151,7 @@ function OriginStep({ value, onSelect }: { value: string; onSelect: (origin: str
   return (
     <div className="space-y-1.5">
       <Select value={value} onValueChange={(next) => onSelect(next ?? CUSTOM_NO_INTEREST)}>
-        <SelectTrigger>
+        <SelectTrigger aria-label="Origen del financiamiento">
           <SelectValue placeholder="Selecciona el origen">{(value: string) => originLabel(value)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -213,10 +214,14 @@ function DetailsStep({
       {isFixedPlan ? (
         <>
           <div className="space-y-1.5">
-            <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            <label
+              htmlFor="financing-total-amount"
+              className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+            >
               Monto total a pagar
             </label>
             <Input
+              id="financing-total-amount"
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -228,8 +233,14 @@ function DetailsStep({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Plazo en meses</label>
+            <label
+              htmlFor="financing-term-months"
+              className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+            >
+              Plazo en meses
+            </label>
             <Input
+              id="financing-term-months"
               type="number"
               inputMode="numeric"
               step="1"
@@ -243,10 +254,14 @@ function DetailsStep({
       ) : (
         <>
           <div className="space-y-1.5">
-            <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            <label
+              htmlFor="financing-rate"
+              className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+            >
               Tasa de interés anual (%)
             </label>
             <Input
+              id="financing-rate"
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -260,10 +275,14 @@ function DetailsStep({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            <label
+              htmlFor="financing-minimum-payment"
+              className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+            >
               Pago mínimo mensual
             </label>
             <Input
+              id="financing-minimum-payment"
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -300,7 +319,7 @@ function ExtraPaymentStep({
 }) {
   return (
     <div className="space-y-4">
-      <AmountKeypad value={value} onChange={onChange} autoFocus />
+      <AmountKeypad value={value} onChange={onChange} autoFocus ariaLabel="Pago extra mensual" />
       <Button type="button" onClick={onNext} className="h-11 w-full bg-ki-awakening text-void hover:bg-ki-awakening/90">
         Siguiente
       </Button>

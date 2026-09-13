@@ -1,22 +1,12 @@
-import Link from "next/link";
-import { cn } from "cn";
+import { AppNav } from "@/components/app-nav";
 import { ProfileMenu } from "@/components/profile-menu";
 import { createClient } from "@/lib/supabase/server";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/transactions", label: "Movimientos" },
-  { href: "/budget", label: "Presupuesto" },
-  { href: "/dragons", label: "Dragones" },
-  { href: "/training", label: "Entrenamiento" },
-  { href: "/categories", label: "Categorías" },
-] as const;
-
-export async function AppHeader({
-  active,
-}: {
-  active: "dashboard" | "transactions" | "budget" | "dragons" | "training" | "categories" | "settings";
-}) {
+// Vive en el layout compartido de (app), no en cada página, para que se
+// monte una sola vez y no participe de los Suspense boundaries de
+// loading.tsx — la nav debe sentirse fija, como el shell de una app, no
+// recargarse junto con el contenido de cada pantalla.
+export async function AppHeader() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -36,22 +26,9 @@ export async function AppHeader({
     <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
       <div className="flex items-center gap-8">
         <span className="font-display text-xl font-bold tracking-[0.2em]">ZENI</span>
-        <nav className="flex items-center gap-5">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                active === item.href.slice(1) ? "text-ink" : "text-ink-muted hover:text-ink",
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <AppNav />
       </div>
-      <ProfileMenu active={active === "settings"} avatarId={avatarId} />
+      <ProfileMenu avatarId={avatarId} />
     </header>
   );
 }
