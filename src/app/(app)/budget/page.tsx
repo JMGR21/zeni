@@ -25,6 +25,7 @@ export default async function BudgetPage() {
       .from("categories")
       .select("id, name")
       .eq("type", "expense")
+      .eq("active", true)
       .order("name")
       .returns<{ id: string; name: string }[]>(),
     supabase.from("budgets").select("category_id, amount").returns<{ category_id: string; amount: number }[]>(),

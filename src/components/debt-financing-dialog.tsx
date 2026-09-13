@@ -151,7 +151,7 @@ function OriginStep({ value, onSelect }: { value: string; onSelect: (origin: str
     <div className="space-y-1.5">
       <Select value={value} onValueChange={(next) => onSelect(next ?? CUSTOM_NO_INTEREST)}>
         <SelectTrigger>
-          <SelectValue placeholder="Selecciona el origen" />
+          <SelectValue placeholder="Selecciona el origen">{(value: string) => originLabel(value)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>

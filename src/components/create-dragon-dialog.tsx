@@ -2,10 +2,15 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus } from "lucide-react";
 import { GiDragonHead, GiHandcuffs, GiPiggyBank } from "react-icons/gi";
 import { cn } from "cn";
-import { createDragon, type CreateDragonActionState } from "@/app/(app)/dragons/actions";
+import {
+  createDragon,
+  updateDragon,
+  type CreateDragonActionState,
+  type UpdateDragonActionState,
+} from "@/app/(app)/dragons/actions";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,17 +18,26 @@ import { Input } from "@/components/ui/input";
 import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
 
 const initialState: CreateDragonActionState = {};
+const initialEditState: UpdateDragonActionState = {};
 
 type DragonType = "savings" | "debt";
 
+export type EditableDragon = {
+  id: string;
+  type: DragonType;
+  name: string;
+  target_amount: number;
+};
+
 const STEP_LABELS = ["Tipo", "Nombre", "Meta", "Inicial", "Confirmar"] as const;
+const EDIT_STEP_LABELS = ["Nombre", "Meta", "Confirmar"] as const;
 
 const summaryCurrencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
 });
 
-function SubmitButton() {
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <Button
@@ -37,7 +51,7 @@ function SubmitButton() {
           Guardando...
         </>
       ) : (
-        "Invocar Dragón"
+        label
       )}
     </Button>
   );
@@ -198,7 +212,7 @@ function ReviewStep({
           {error}
         </p>
       )}
-      <SubmitButton />
+      <SubmitButton label="Invocar Dragón" />
     </div>
   );
 }
@@ -264,12 +278,108 @@ function CreateDragonWizard({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-export function CreateDragonDialog({ variant = "fab" }: { variant?: "fab" | "inline" }) {
+function EditReviewStep({
+  name,
+  targetAmount,
+  error,
+  onEditStep,
+}: {
+  name: string;
+  targetAmount: number;
+  error?: string;
+  onEditStep: (step: number) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2 rounded-lg border border-ink-muted/10 bg-void/40 p-3">
+        <WizardSummaryRow label="Nombre" value={name} onEdit={() => onEditStep(0)} />
+        <WizardSummaryRow
+          label="Meta"
+          value={summaryCurrencyFormatter.format(targetAmount)}
+          onEdit={() => onEditStep(1)}
+        />
+      </div>
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      <SubmitButton label="Guardar cambios" />
+    </div>
+  );
+}
+
+function EditDragonWizard({ dragon, onSuccess }: { dragon: EditableDragon; onSuccess: () => void }) {
+  const [state, formAction] = useActionState(updateDragon, initialEditState);
+  const [step, setStep] = useState(0);
+  const [maxReached, setMaxReached] = useState(0);
+  const [name, setName] = useState(dragon.name);
+  const [targetAmount, setTargetAmount] = useState(String(dragon.target_amount));
+
+  useEffect(() => {
+    if (state.success) onSuccess();
+  }, [state.success, onSuccess]);
+
+  function goTo(next: number) {
+    setStep(next);
+    setMaxReached((prev) => Math.max(prev, next));
+  }
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="id" value={dragon.id} />
+      <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="target_amount" value={Number(targetAmount || "0").toFixed(2)} />
+
+      <WizardProgress steps={EDIT_STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
+
+      <WizardStepHeader label={EDIT_STEP_LABELS[step]} step={step} onBack={() => goTo(step - 1)} />
+
+      <div key={step} className="animate-in fade-in-0 slide-in-from-right-2 duration-200">
+        {step === 0 && <NameStep type={dragon.type} value={name} onChange={setName} onNext={() => goTo(1)} />}
+        {step === 1 && (
+          <TargetAmountStep type={dragon.type} value={targetAmount} onChange={setTargetAmount} onNext={() => goTo(2)} />
+        )}
+        {step === 2 && (
+          <EditReviewStep
+            name={name}
+            targetAmount={Number(targetAmount || "0")}
+            error={state.error}
+            onEditStep={goTo}
+          />
+        )}
+      </div>
+    </form>
+  );
+}
+
+export function CreateDragonDialog({
+  variant = "fab",
+  mode = "create",
+  dragon,
+}: {
+  variant?: "fab" | "inline";
+  mode?: "create" | "edit";
+  dragon?: EditableDragon;
+}) {
   const [open, setOpen] = useState(false);
+  const isEdit = mode === "edit" && !!dragon;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {variant === "fab" ? (
+      {isEdit ? (
+        <DialogTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Editar Dragón"
+              className="flex size-8 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
+            />
+          }
+        >
+          <Pencil className="size-4" />
+        </DialogTrigger>
+      ) : variant === "fab" ? (
         <DialogTrigger
           render={
             <button
@@ -294,11 +404,16 @@ export function CreateDragonDialog({ variant = "fab" }: { variant?: "fab" | "inl
         <DialogHeader>
           <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
             <GiDragonHead className="size-3.5 text-ki-awakening" aria-hidden="true" />
-            Nueva meta
+            {isEdit ? "Editar" : "Nueva meta"}
           </div>
-          <DialogTitle>Invocar Dragón</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar Dragón" : "Invocar Dragón"}</DialogTitle>
         </DialogHeader>
-        {open && <CreateDragonWizard onSuccess={() => setOpen(false)} />}
+        {open &&
+          (isEdit ? (
+            <EditDragonWizard dragon={dragon} onSuccess={() => setOpen(false)} />
+          ) : (
+            <CreateDragonWizard onSuccess={() => setOpen(false)} />
+          ))}
       </DialogContent>
     </Dialog>
   );

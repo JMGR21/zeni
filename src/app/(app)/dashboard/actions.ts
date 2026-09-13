@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { applyDragonContribution } from "@/lib/apply-dragon-contribution";
 import { grantXp } from "@/lib/grant-xp";
 import { getWeekDedupeKey, getWeekStart, getWeeklyXpTierAmount, resolveWeeklyXpAction, toISODateString } from "@/lib/weekly-xp";
 
@@ -34,6 +35,7 @@ export async function addTransaction(
 
   const categoryId = getField(formData, "category_id");
   const description = getField(formData, "description");
+  const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
 
   const supabase = await createClient();
   const {
@@ -48,10 +50,112 @@ export async function addTransaction(
     amount,
     description: description || null,
     occurred_on: occurredOn,
+    dragon_id: dragonId || null,
   });
   if (error) return { error: error.message };
 
+  if (dragonId) {
+    const contributionResult = await applyDragonContribution(supabase, user.id, dragonId, amount);
+    if (contributionResult.error) return { error: contributionResult.error };
+    revalidatePath("/dragons");
+  }
+
   await grantDailyAndWeeklyXp(supabase, user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return { success: true };
+}
+
+export type UpdateTransactionActionState = { error?: string; success?: boolean };
+
+export async function updateTransaction(
+  _previousState: UpdateTransactionActionState,
+  formData: FormData,
+): Promise<UpdateTransactionActionState> {
+  const id = getField(formData, "id");
+  if (!id) return { error: "Falta el movimiento a editar." };
+
+  const type = getField(formData, "type");
+  if (type !== "income" && type !== "expense") {
+    return { error: "Selecciona un tipo válido." };
+  }
+
+  const amount = Number(getField(formData, "amount"));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Ingresa un monto válido." };
+  }
+
+  const occurredOn = getField(formData, "occurred_on");
+  if (!occurredOn) {
+    return { error: "Selecciona una fecha." };
+  }
+
+  const categoryId = getField(formData, "category_id");
+  const description = getField(formData, "description");
+  const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("transactions")
+    .select("dragon_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single<{ dragon_id: string | null }>();
+  if (fetchError || !existing) return { error: "No se encontró el movimiento." };
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({
+      category_id: categoryId || null,
+      type,
+      amount,
+      description: description || null,
+      occurred_on: occurredOn,
+      dragon_id: dragonId || null,
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  // El abono a un Dragón solo se aplica cuando el vínculo pasa de "sin
+  // Dragón" a "con Dragón" en esta edición. Cambiar de Dragón o
+  // desvincular uno que ya tenía un abono aplicado NO revierte ni reaplica
+  // ese abono histórico — es una simplificación intencional para evitar
+  // lógica de reversión (ver resumen de Fase 7 pieza 7 en CLAUDE.md).
+  if (dragonId && !existing.dragon_id) {
+    const contributionResult = await applyDragonContribution(supabase, user.id, dragonId, amount);
+    if (contributionResult.error) return { error: contributionResult.error };
+    revalidatePath("/dragons");
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return { success: true };
+}
+
+export type DeleteTransactionActionState = { error?: string; success?: boolean };
+
+export async function deleteTransaction(
+  _previousState: DeleteTransactionActionState,
+  formData: FormData,
+): Promise<DeleteTransactionActionState> {
+  const id = getField(formData, "id");
+  if (!id) return { error: "Falta el movimiento a eliminar." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { error: error.message };
 
   revalidatePath("/dashboard");
   return { success: true };

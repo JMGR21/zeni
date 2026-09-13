@@ -2,7 +2,9 @@ import { CircleCheck, TriangleAlert } from "lucide-react";
 import { cn } from "cn";
 import { AttackOrderControls } from "@/components/attack-order-controls";
 import { ContributeDragonDialog } from "@/components/contribute-dragon-dialog";
+import { CreateDragonDialog } from "@/components/create-dragon-dialog";
 import { DebtFinancingDialog } from "@/components/debt-financing-dialog";
+import { DeleteDragonDialog } from "@/components/delete-dragon-dialog";
 import { DragonMotif } from "@/components/dragon-motif";
 import { SphereOrb } from "@/components/sphere-orb";
 import { DRAGON_ACCENT_STYLES, getDragonAccent } from "@/lib/dragon-accent";
@@ -94,7 +96,14 @@ export function DragonCard({
             {institution && <p className="text-xs text-ink-muted">{institution.name}</p>}
           </div>
         </div>
-        {completed && <CircleCheck className={cn("size-5 shrink-0", accent.text)} aria-hidden="true" />}
+        <div className="flex shrink-0 items-center gap-1">
+          {completed && <CircleCheck className={cn("size-5", accent.text)} aria-hidden="true" />}
+          <CreateDragonDialog
+            mode="edit"
+            dragon={{ id: dragon.id, type: dragon.type, name: dragon.name, target_amount: dragon.target_amount }}
+          />
+          <DeleteDragonDialog dragonId={dragon.id} dragonName={dragon.name} />
+        </div>
       </div>
 
       <div className="mt-3">

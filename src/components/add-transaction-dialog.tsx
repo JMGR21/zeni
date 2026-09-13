@@ -2,11 +2,15 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { ChevronLeft, ChevronRight, Loader2, Plus, TrendingDown, TrendingUp } from "lucide-react";
-import { cn } from "cn";
-import { addTransaction, type AddTransactionActionState } from "@/app/(app)/dashboard/actions";
+import { Loader2, Pencil, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  addTransaction,
+  updateTransaction,
+  type AddTransactionActionState,
+} from "@/app/(app)/dashboard/actions";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
 
 export type TransactionCategory = {
@@ -23,10 +28,26 @@ export type TransactionCategory = {
   type: "income" | "expense";
 };
 
+export type DragonOption = {
+  id: string;
+  name: string;
+};
+
+export type EditableTransaction = {
+  id: string;
+  type: "income" | "expense";
+  amount: number;
+  category_id: string | null;
+  description: string | null;
+  occurred_on: string;
+  dragon_id: string | null;
+};
+
+const NO_DRAGON = "none";
+
 type TransactionType = "income" | "expense";
 
 const STEP_LABELS = ["Tipo", "Monto", "Categoría", "Fecha", "Confirmar"] as const;
-const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
 
 const initialState: AddTransactionActionState = {};
 
@@ -42,22 +63,7 @@ function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function monthGrid(viewDate: Date) {
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const startWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: (Date | null)[] = Array.from({ length: startWeekday }, () => null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(year, month, day));
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
-
-function SubmitButton() {
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <Button
@@ -71,7 +77,7 @@ function SubmitButton() {
           Guardando...
         </>
       ) : (
-        "Guardar movimiento"
+        label
       )}
     </Button>
   );
@@ -157,77 +163,7 @@ function CategoryStep({
 }
 
 function DateStep({ selected, onSelect }: { selected: Date; onSelect: (date: Date) => void }) {
-  const [viewDate, setViewDate] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
-  const today = new Date();
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  const cells = monthGrid(viewDate);
-  const monthLabel = viewDate.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
-
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onSelect(today)}
-          className="rounded-full border border-ink-muted/15 px-3 py-1 text-xs text-ink-muted transition-colors hover:border-ki-awakening/40 hover:text-ink"
-        >
-          Hoy
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect(yesterday)}
-          className="rounded-full border border-ink-muted/15 px-3 py-1 text-xs text-ink-muted transition-colors hover:border-ki-awakening/40 hover:text-ink"
-        >
-          Ayer
-        </button>
-      </div>
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          aria-label="Mes anterior"
-          onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-          className="flex size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <span className="font-display text-sm text-ink capitalize">{monthLabel}</span>
-        <button
-          type="button"
-          aria-label="Mes siguiente"
-          onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-          className="flex size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-center font-mono text-[11px] text-ink-muted">
-        {WEEKDAY_LABELS.map((label, index) => (
-          <span key={index}>{label}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((date, index) => {
-          if (!date) return <span key={index} />;
-          const active = isSameDay(date, selected);
-          const isToday = isSameDay(date, today);
-          return (
-            <button
-              key={index}
-              type="button"
-              onClick={() => onSelect(date)}
-              className={cn(
-                "flex h-9 items-center justify-center rounded-md text-sm text-ink transition-colors hover:bg-ink-muted/10",
-                active && "bg-ki-awakening font-semibold text-void hover:bg-ki-awakening",
-                isToday && !active && "ring-1 ring-ki-awakening/50 ring-inset",
-              )}
-            >
-              {date.getDate()}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return <Calendar selected={selected} onSelect={onSelect} />;
 }
 
 function ReviewStep({
@@ -235,14 +171,24 @@ function ReviewStep({
   amount,
   categoryName,
   date,
+  description,
+  dragons,
+  dragonId,
+  onDragonChange,
   error,
+  submitLabel,
   onEditStep,
 }: {
   type: TransactionType;
   amount: number;
   categoryName: string;
   date: Date;
+  description: string;
+  dragons: DragonOption[];
+  dragonId: string | null;
+  onDragonChange: (next: string | null) => void;
   error?: string;
+  submitLabel: string;
   onEditStep: (step: number) => void;
 }) {
   const dateLabel = date.toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
@@ -262,32 +208,70 @@ function ReviewStep({
       <Input
         name="description"
         placeholder="Nota (opcional)"
+        defaultValue={description}
         className="h-9 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
       />
+      {type === "expense" && dragons.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            ¿Este pago va a un Dragón?
+          </label>
+          <Select
+            value={dragonId ?? NO_DRAGON}
+            onValueChange={(next) => onDragonChange(next && next !== NO_DRAGON ? next : null)}
+          >
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Ninguno">
+                {(value: string) =>
+                  value === NO_DRAGON ? "Ninguno" : (dragons.find((dragon) => dragon.id === value)?.name ?? "Ninguno")
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_DRAGON}>Ninguno</SelectItem>
+              {dragons.map((dragon) => (
+                <SelectItem key={dragon.id} value={dragon.id}>
+                  {dragon.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
-      <SubmitButton />
+      <SubmitButton label={submitLabel} />
     </div>
   );
 }
 
 function TransactionWizard({
   categories,
+  dragons,
   onSuccess,
+  mode = "create",
+  transaction,
 }: {
   categories: TransactionCategory[];
+  dragons: DragonOption[];
   onSuccess: () => void;
+  mode?: "create" | "edit";
+  transaction?: EditableTransaction;
 }) {
-  const [state, formAction] = useActionState(addTransaction, initialState);
-  const [step, setStep] = useState(0);
-  const [maxReached, setMaxReached] = useState(0);
-  const [type, setType] = useState<TransactionType | null>(null);
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [date, setDate] = useState(() => new Date());
+  const isEdit = mode === "edit" && !!transaction;
+  const [state, formAction] = useActionState(isEdit ? updateTransaction : addTransaction, initialState);
+  const [step, setStep] = useState(isEdit ? 4 : 0);
+  const [maxReached, setMaxReached] = useState(isEdit ? 4 : 0);
+  const [type, setType] = useState<TransactionType | null>(transaction?.type ?? null);
+  const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
+  const [categoryId, setCategoryId] = useState<string | null>(transaction?.category_id ?? null);
+  const [dragonId, setDragonId] = useState<string | null>(transaction?.dragon_id ?? null);
+  const [date, setDate] = useState(() =>
+    transaction ? new Date(`${transaction.occurred_on}T00:00:00`) : new Date(),
+  );
 
   useEffect(() => {
     if (state.success) onSuccess();
@@ -303,10 +287,12 @@ function TransactionWizard({
 
   return (
     <form action={formAction} className="space-y-4">
+      {isEdit && <input type="hidden" name="id" value={transaction.id} />}
       <input type="hidden" name="type" value={type ?? ""} />
       <input type="hidden" name="amount" value={Number(amount || "0").toFixed(2)} />
       <input type="hidden" name="category_id" value={categoryId ?? ""} />
       <input type="hidden" name="occurred_on" value={toISODate(date)} />
+      <input type="hidden" name="dragon_id" value={type === "expense" ? (dragonId ?? "") : ""} />
 
       <WizardProgress steps={STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
 
@@ -318,6 +304,7 @@ function TransactionWizard({
             onSelect={(selected) => {
               setType(selected);
               setCategoryId(null);
+              setDragonId(null);
               goTo(1);
             }}
           />
@@ -347,7 +334,12 @@ function TransactionWizard({
             amount={Number(amount || "0")}
             categoryName={selectedCategory?.name ?? "Sin categoría"}
             date={date}
+            description={transaction?.description ?? ""}
+            dragons={dragons}
+            dragonId={dragonId}
+            onDragonChange={setDragonId}
             error={state.error}
+            submitLabel={isEdit ? "Guardar cambios" : "Guardar movimiento"}
             onEditStep={goTo}
           />
         )}
@@ -358,28 +350,49 @@ function TransactionWizard({
 
 export function AddTransactionDialog({
   categories,
+  dragons = [],
+  mode = "create",
+  transaction,
 }: {
   categories: TransactionCategory[];
+  dragons?: DragonOption[];
+  mode?: "create" | "edit";
+  transaction?: EditableTransaction;
 }) {
   const [open, setOpen] = useState(false);
+  const isEdit = mode === "edit";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <button
-            aria-label="Agregar movimiento"
-            className="fixed right-6 bottom-6 z-40 flex size-14 items-center justify-center rounded-full bg-ki-awakening text-void shadow-lg transition-transform hover:scale-105 active:scale-95"
+      {isEdit ? (
+        <DialogTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Editar movimiento"
+              className="flex size-8 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink"
+            />
+          }
+        >
+          <Pencil className="size-4" />
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger
+          render={
+            <button
+              aria-label="Agregar movimiento"
+              className="fixed right-6 bottom-6 z-40 flex size-14 items-center justify-center rounded-full bg-ki-awakening text-void shadow-lg transition-transform hover:scale-105 active:scale-95"
+            />
+          }
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full border border-ki-awakening"
+            style={{ animation: "scouter-pulse 2.4s ease-out infinite" }}
           />
-        }
-      >
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 rounded-full border border-ki-awakening"
-          style={{ animation: "scouter-pulse 2.4s ease-out infinite" }}
-        />
-        <Plus className="size-6" />
-      </DialogTrigger>
+          <Plus className="size-6" />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
@@ -388,11 +401,19 @@ export function AddTransactionDialog({
               className="size-1.5 rounded-full bg-ki-awakening"
               style={{ animation: "scouter-blink 1.6s ease-in-out infinite" }}
             />
-            Registro
+            {isEdit ? "Editar" : "Registro"}
           </div>
-          <DialogTitle>Nuevo movimiento</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar movimiento" : "Nuevo movimiento"}</DialogTitle>
         </DialogHeader>
-        {open && <TransactionWizard categories={categories} onSuccess={() => setOpen(false)} />}
+        {open && (
+          <TransactionWizard
+            categories={categories}
+            dragons={dragons}
+            onSuccess={() => setOpen(false)}
+            mode={mode}
+            transaction={transaction}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

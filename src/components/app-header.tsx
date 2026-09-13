@@ -1,15 +1,37 @@
-import { User } from "lucide-react";
 import Link from "next/link";
 import { cn } from "cn";
-import { signOut } from "@/app/(auth)/actions";
+import { ProfileMenu } from "@/components/profile-menu";
+import { createClient } from "@/lib/supabase/server";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/transactions", label: "Movimientos" },
   { href: "/budget", label: "Presupuesto" },
   { href: "/dragons", label: "Dragones" },
+  { href: "/training", label: "Entrenamiento" },
+  { href: "/categories", label: "Categorías" },
 ] as const;
 
-export function AppHeader({ active }: { active: "dashboard" | "budget" | "dragons" }) {
+export async function AppHeader({
+  active,
+}: {
+  active: "dashboard" | "transactions" | "budget" | "dragons" | "training" | "categories" | "settings";
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let avatarId: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("avatar_id")
+      .eq("id", user.id)
+      .single<{ avatar_id: string | null }>();
+    avatarId = profile?.avatar_id ?? null;
+  }
+
   return (
     <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
       <div className="flex items-center gap-8">
@@ -29,15 +51,7 @@ export function AppHeader({ active }: { active: "dashboard" | "budget" | "dragon
           ))}
         </nav>
       </div>
-      <form action={signOut}>
-        <button
-          type="submit"
-          aria-label="Cerrar sesión"
-          className="flex size-9 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-        >
-          <User className="size-5" />
-        </button>
-      </form>
+      <ProfileMenu active={active === "settings"} avatarId={avatarId} />
     </header>
   );
 }

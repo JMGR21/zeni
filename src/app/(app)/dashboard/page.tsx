@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { GiDragonHead } from "react-icons/gi";
-import { AddTransactionDialog, type TransactionCategory } from "@/components/add-transaction-dialog";
+import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
 import { AppHeader } from "@/components/app-header";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiGauge } from "@/components/ki-gauge";
 import { LevelBadge } from "@/components/level-badge";
+import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransformationOverlay } from "@/components/transformation-overlay";
 import { getKiLevel } from "@/lib/ki";
 import { awardMonthlyXp, calculateKi } from "@/lib/ki-engine";
@@ -11,24 +13,10 @@ import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
 import { createClient } from "@/lib/supabase/server";
 
-type RecentTransaction = {
-  id: string;
-  type: "income" | "expense";
-  amount: number;
-  description: string | null;
-  occurred_on: string;
-  categories: { name: string } | null;
-};
-
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
   maximumFractionDigits: 0,
-});
-
-const dateFormatter = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
 });
 
 function monthRange(now: Date) {
@@ -45,17 +33,23 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }, kiResult] =
+  const [{ data: monthTransactions }, { data: recentTransactions }, { data: categories }, { data: dragons }, kiResult] =
     await Promise.all([
       supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
       supabase
         .from("transactions")
-        .select("id, type, amount, description, occurred_on, categories(name)")
+        .select("id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)")
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(10)
         .returns<RecentTransaction[]>(),
-      supabase.from("categories").select("id, name, type").order("name").returns<TransactionCategory[]>(),
+      supabase
+        .from("categories")
+        .select("id, name, type")
+        .eq("active", true)
+        .order("name")
+        .returns<TransactionCategory[]>(),
+      supabase.from("dragons").select("id, name").eq("status", "active").order("name").returns<DragonOption[]>(),
       user ? calculateKi(user.id) : Promise.resolve(null),
     ]);
 
@@ -151,54 +145,22 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mx-auto w-full max-w-4xl px-6 pb-16">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
-          Movimientos recientes
-        </h2>
-        <table className="mt-4 w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-ink-muted/10 text-ink-muted">
-              <th className="py-2 font-normal">Fecha</th>
-              <th className="py-2 font-normal">Categoría</th>
-              <th className="py-2 font-normal">Descripción</th>
-              <th className="py-2 text-right font-normal">Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentTransactions && recentTransactions.length > 0 ? (
-              recentTransactions.map((transaction) => (
-                <tr key={transaction.id} className="border-b border-ink-muted/10">
-                  <td className="py-3 text-ink-muted">
-                    {dateFormatter.format(new Date(`${transaction.occurred_on}T00:00:00`))}
-                  </td>
-                  <td className="py-3 text-ink-muted">
-                    {transaction.categories?.name ?? "Sin categoría"}
-                  </td>
-                  <td className="py-3 text-ink-muted">
-                    {transaction.description || "—"}
-                  </td>
-                  <td
-                    className={`py-3 text-right font-mono ${
-                      transaction.type === "income" ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {transaction.type === "income" ? "+" : "-"}
-                    {currencyFormatter.format(transaction.amount)}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr className="border-b border-ink-muted/10">
-                <td className="py-3 text-ink-muted">—</td>
-                <td className="py-3 text-ink-muted">—</td>
-                <td className="py-3 text-ink-muted">Sin movimientos todavía</td>
-                <td className="py-3 text-right text-ink-muted">—</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+            Movimientos recientes
+          </h2>
+          <Link href="/transactions" className="text-sm text-ki-awakening hover:underline">
+            Ver todos
+          </Link>
+        </div>
+        <RecentTransactions
+          transactions={recentTransactions ?? []}
+          categories={categories ?? []}
+          dragons={dragons ?? []}
+        />
       </section>
 
-      <AddTransactionDialog categories={categories ?? []} />
+      <AddTransactionDialog categories={categories ?? []} dragons={dragons ?? []} />
       <TransformationOverlay
         active={transformationJustHappened}
         levelLabel={kiLevel.label}
