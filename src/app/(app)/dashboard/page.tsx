@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GiDragonHead } from "react-icons/gi";
 import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
+import { AchievementToastQueue } from "@/components/achievement-toast-queue";
 import { AuraIcon } from "@/components/aura-icon";
 import { KiEvolutionChart, type KiScorePoint } from "@/components/ki-evolution-chart";
 import { KiGauge } from "@/components/ki-gauge";
@@ -11,6 +12,8 @@ import { getKiLevel, getKiProgressToNextLevel } from "@/lib/ki";
 import { awardMonthlyXp, calculateKi } from "@/lib/ki-engine";
 import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
+import { evaluateGeneralAchievements } from "@/lib/achievement-engine";
+import type { AchievementDefinition } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/server";
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -61,6 +64,7 @@ export default async function DashboardPage() {
   ]);
 
   let transformationJustHappened = false;
+  const newAchievements: AchievementDefinition[] = [];
   if (user && kiResult) {
     await supabase.from("ki_scores").upsert(
       {
@@ -73,10 +77,14 @@ export default async function DashboardPage() {
     );
     const monthlyXp = await awardMonthlyXp(user.id, kiResult.level.label);
     transformationJustHappened = monthlyXp.transformationJustHappened;
+    newAchievements.push(...monthlyXp.achievements);
   }
 
   const totalXp = user ? await getTotalXp(supabase, user.id) : 0;
   const levelInfo = getLevelFromXp(totalXp);
+  if (user) {
+    newAchievements.push(...(await evaluateGeneralAchievements(supabase, user.id, levelInfo.level)));
+  }
 
   const income = (monthTransactions ?? [])
     .filter((transaction) => transaction.type === "income")
@@ -181,6 +189,7 @@ export default async function DashboardPage() {
         levelLabel={kiLevel.label}
         colorToken={kiLevel.colorToken}
       />
+      <AchievementToastQueue achievements={newAchievements} />
     </>
   );
 }

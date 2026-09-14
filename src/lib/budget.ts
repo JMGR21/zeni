@@ -31,20 +31,21 @@ function monthStart(from: Date, monthsAgo: number) {
 }
 
 /**
- * Presupuesto sugerido para una categoría de gasto: el promedio de gasto
- * mensual en los últimos SUGGESTION_MONTHS meses calendario completos (el
- * mes en curso no cuenta, sigue incompleto).
+ * Promedio de gasto mensual en los últimos SUGGESTION_MONTHS meses
+ * calendario completos (el mes en curso no cuenta, sigue incompleto) —
+ * `categoryId: null` para el gasto TOTAL del usuario (todas las
+ * categorías), o el id de una categoría para el gasto solo de esa.
  *
  * Devuelve `available: false` si el usuario no tiene todavía un mes
- * calendario completo de historial (en cualquier categoría) o si esta
- * categoría en particular no tuvo gasto en la ventana de sugerencia —
- * en ambos casos no hay base suficiente para no inventar un número.
+ * calendario completo de historial, o si no hubo gasto (de esa categoría,
+ * o total) en la ventana — en ambos casos no hay base suficiente para no
+ * inventar un número.
  */
-export async function getSuggestedBudget(
+async function getAverageMonthlyExpenseAmount(
   supabase: SupabaseClient,
   userId: string,
-  categoryId: string,
-  now: Date = new Date(),
+  categoryId: string | null,
+  now: Date,
 ): Promise<SuggestedBudget> {
   const currentMonthStart = toISODate(monthStart(now, 0));
 
@@ -62,14 +63,18 @@ export async function getSuggestedBudget(
 
   const windowStart = toISODate(monthStart(now, SUGGESTION_MONTHS));
 
-  const { data: rows } = await supabase
+  let query = supabase
     .from("transactions")
     .select("amount")
     .eq("user_id", userId)
-    .eq("category_id", categoryId)
     .eq("type", "expense")
     .gte("occurred_on", windowStart)
     .lt("occurred_on", currentMonthStart);
+  if (categoryId !== null) {
+    query = query.eq("category_id", categoryId);
+  }
+
+  const { data: rows } = await query;
 
   if (!rows || rows.length === 0) {
     return { available: false };
@@ -77,6 +82,30 @@ export async function getSuggestedBudget(
 
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   return { available: true, amount: total / SUGGESTION_MONTHS };
+}
+
+/** Presupuesto sugerido para una categoría de gasto — ver `getAverageMonthlyExpenseAmount`. */
+export async function getSuggestedBudget(
+  supabase: SupabaseClient,
+  userId: string,
+  categoryId: string,
+  now: Date = new Date(),
+): Promise<SuggestedBudget> {
+  return getAverageMonthlyExpenseAmount(supabase, userId, categoryId, now);
+}
+
+/**
+ * Gasto mensual promedio TOTAL del usuario (todas las categorías), misma
+ * ventana que `getSuggestedBudget` — usado por los logros de "colchón"/
+ * fondo de emergencia (Categoría H), que miden contra el gasto real del
+ * usuario en vez de un monto fijo.
+ */
+export async function getAverageMonthlyExpense(
+  supabase: SupabaseClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<SuggestedBudget> {
+  return getAverageMonthlyExpenseAmount(supabase, userId, null, now);
 }
 
 /**

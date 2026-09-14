@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 export type TransactionCategory = {
   id: string;
@@ -264,6 +265,7 @@ function TransactionWizard({
 }) {
   const isEdit = mode === "edit" && !!transaction;
   const [state, formAction] = useActionState(isEdit ? updateTransaction : addTransaction, initialState);
+  useAchievementToasts(state.achievements);
   const [step, setStep] = useState(isEdit ? 4 : 0);
   const [maxReached, setMaxReached] = useState(isEdit ? 4 : 0);
   const [type, setType] = useState<TransactionType | null>(transaction?.type ?? null);

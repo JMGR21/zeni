@@ -8,6 +8,7 @@ import { setBudget, type BudgetActionState } from "@/app/(app)/budget/actions";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 const initialState: BudgetActionState = {};
 
@@ -43,6 +44,7 @@ export function EditBudgetDialog({
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [state, formAction] = useActionState(setBudget, initialState);
+  useAchievementToasts(state.achievements);
 
   // Cierra el modal tras un guardado exitoso, sin usar un efecto: se detecta
   // el cambio de `state` durante el render (patrón recomendado por React

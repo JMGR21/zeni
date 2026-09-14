@@ -7,6 +7,7 @@ import { updateProfile, type UpdateProfileActionState } from "@/app/(app)/settin
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 const initialState: UpdateProfileActionState = {};
 
@@ -42,6 +43,7 @@ export function SettingsForm({
   initialCurrency: string;
 }) {
   const [state, formAction] = useActionState(updateProfile, initialState);
+  useAchievementToasts(state.achievements);
   const [name, setName] = useState(initialName);
   const [currency, setCurrency] = useState(initialCurrency);
 

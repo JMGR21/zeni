@@ -1,9 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { grantAchievement } from "@/lib/grant-achievement";
+import type { AchievementDefinition } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
 
-export type UpdateProfileActionState = { error?: string; success?: boolean };
+export type UpdateProfileActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 
 function getField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -32,8 +34,10 @@ export async function updateProfile(
   if (error) return { error: error.message };
   if (!count) return { error: "No se pudo guardar el cambio. Intenta de nuevo." };
 
+  const result = await grantAchievement(supabase, user.id, "identidad-completa");
+
   revalidatePath("/settings");
-  return { success: true };
+  return { success: true, achievements: result.granted ? [result.achievement] : [] };
 }
 
 export async function updateAvatar(avatarId: string) {

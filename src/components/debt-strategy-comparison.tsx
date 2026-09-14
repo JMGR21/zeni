@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { GiCrossedSwords, GiSnowflake1 } from "react-icons/gi";
 import type { Dragon } from "@/components/dragon-card";
+import { ComparatorUsageTracker } from "@/components/comparator-usage-tracker";
 import { simulateDebtPayoff, type DebtPayoffInput, type DebtPayoffResult } from "@/lib/debt-payoff-simulator";
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -118,6 +119,7 @@ export function DebtStrategyComparison({ dragons }: { dragons: Dragon[] }) {
   if (inputs.length < 2) {
     return (
       <div className="mt-8">
+        <ComparatorUsageTracker />
         <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
           Comparador de estrategias
         </h2>
@@ -133,6 +135,7 @@ export function DebtStrategyComparison({ dragons }: { dragons: Dragon[] }) {
 
   return (
     <div className="mt-8">
+      <ComparatorUsageTracker />
       <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
         Comparador de estrategias
       </h2>

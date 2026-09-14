@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { AddTransactionDialog, type DragonOption, type TransactionCategory } from "@/components/add-transaction-dialog";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransactionsFilters } from "@/components/transactions-filters";
+import { grantAchievement } from "@/lib/grant-achievement";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 25;
@@ -33,6 +34,13 @@ export default async function TransactionsPage({
   const to = firstParam(params.to);
   const q = firstParam(params.q)?.trim();
   const page = parsePage(params.page);
+
+  if (q) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await grantAchievement(supabase, user.id, "detective-financiero");
+  }
 
   let query = supabase
     .from("transactions")

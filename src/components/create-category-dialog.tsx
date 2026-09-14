@@ -8,6 +8,7 @@ import { createCategory, type CreateCategoryActionState } from "@/app/(app)/cate
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 type CategoryType = "income" | "expense";
 
@@ -35,6 +36,7 @@ function SubmitButton() {
 
 function CreateCategoryForm({ onSuccess }: { onSuccess: () => void }) {
   const [state, formAction] = useActionState(createCategory, initialState);
+  useAchievementToasts(state.achievements);
   const [type, setType] = useState<CategoryType>("expense");
   const [name, setName] = useState("");
 

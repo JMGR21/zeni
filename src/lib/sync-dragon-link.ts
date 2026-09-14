@@ -1,32 +1,38 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSphereProgress } from "@/lib/spheres";
 import { grantXp } from "@/lib/grant-xp";
+import { evaluateDragonProgressAchievements, evaluateSphereAchievements } from "@/lib/achievement-engine";
+import { grantAchievement } from "@/lib/grant-achievement";
+import type { AchievementDefinition } from "@/lib/achievements";
 
-export type SyncDragonLinkResult = { error?: string; success?: boolean };
+export type SyncDragonLinkResult = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 
-type DragonAmounts = { current_amount: number; target_amount: number };
+type DragonAmounts = { current_amount: number; target_amount: number; type: "savings" | "debt" };
+type AdjustDragonAmountResult = { error?: string; achievements: AchievementDefinition[] };
 
 /**
  * Ajusta `current_amount` de un Dragón por `delta` (puede ser negativo),
  * recalcula `status` y otorga XP por cada Esfera NUEVA cruzada hacia
  * adelante — nunca la quita si `delta` negativo hace que una Esfera ya
- * otorgada vuelva a quedar incompleta (el Nivel nunca baja).
+ * otorgada vuelva a quedar incompleta (el Nivel nunca baja). Devuelve los
+ * logros (Categorías C/D/H) recién desbloqueados por este ajuste, para que
+ * el llamador los pueda mostrar como toasts.
  */
 async function adjustDragonAmount(
   supabase: SupabaseClient,
   userId: string,
   dragonId: string,
   delta: number,
-): Promise<{ error?: string }> {
-  if (delta === 0) return {};
+): Promise<AdjustDragonAmountResult> {
+  if (delta === 0) return { achievements: [] };
 
   const { data: dragon, error: fetchError } = await supabase
     .from("dragons")
-    .select("current_amount, target_amount")
+    .select("current_amount, target_amount, type")
     .eq("id", dragonId)
     .eq("user_id", userId)
     .single<DragonAmounts>();
-  if (fetchError || !dragon) return { error: "No se encontró el dragón." };
+  if (fetchError || !dragon) return { error: "No se encontró el dragón.", achievements: [] };
 
   const spheresBefore = getSphereProgress(dragon.current_amount, dragon.target_amount);
   const nextAmount = dragon.current_amount + delta;
@@ -40,7 +46,7 @@ async function adjustDragonAmount(
     })
     .eq("id", dragonId)
     .eq("user_id", userId);
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, achievements: [] };
 
   const spheresAfter = getSphereProgress(nextAmount, dragon.target_amount);
   const newlyCompletedIndexes = spheresAfter
@@ -51,7 +57,19 @@ async function adjustDragonAmount(
     await grantXp(supabase, userId, "sphere_completed", 50, `sphere:${dragonId}:${sphereIndex}`);
   }
 
-  return {};
+  const sphereAchievements = await evaluateSphereAchievements(supabase, userId, newlyCompletedIndexes.length);
+
+  const wasCompleted = dragon.current_amount >= dragon.target_amount;
+  const isCompleted = nextAmount >= dragon.target_amount;
+  const progressAchievements = await evaluateDragonProgressAchievements(supabase, userId, {
+    dragonType: dragon.type,
+    delta,
+    currentAmount: nextAmount,
+    targetAmount: dragon.target_amount,
+    justCompleted: isCompleted && !wasCompleted,
+  });
+
+  return { achievements: [...sphereAchievements, ...progressAchievements] };
 }
 
 /**
@@ -112,13 +130,13 @@ export async function syncDragonLinkForTransaction(
 ): Promise<SyncDragonLinkResult> {
   const { transactionId, dragonId, amount, previousDragonId, previousAmount } = params;
 
-  if (!previousDragonId && !dragonId) return { success: true };
+  if (!previousDragonId && !dragonId) return { success: true, achievements: [] };
 
   if (previousDragonId && !dragonId) {
     const revert = await adjustDragonAmount(supabase, userId, previousDragonId, -previousAmount);
     if (revert.error) return { error: revert.error };
     await deleteContributionRow(supabase, transactionId);
-    return { success: true };
+    return { success: true, achievements: revert.achievements };
   }
 
   if (!previousDragonId && dragonId) {
@@ -126,18 +144,19 @@ export async function syncDragonLinkForTransaction(
     if (apply.error) return { error: apply.error };
     const row = await upsertContributionRow(supabase, userId, dragonId, amount, transactionId);
     if (row.error) return { error: row.error };
-    return { success: true };
+    const unlocked = [...apply.achievements];
+    const linkResult = await grantAchievement(supabase, userId, "todo-conectado");
+    if (linkResult.granted) unlocked.push(linkResult.achievement);
+    return { success: true, achievements: unlocked };
   }
 
   if (previousDragonId === dragonId && dragonId) {
     const delta = amount - previousAmount;
-    if (delta !== 0) {
-      const adjust = await adjustDragonAmount(supabase, userId, dragonId, delta);
-      if (adjust.error) return { error: adjust.error };
-    }
+    const adjust = delta !== 0 ? await adjustDragonAmount(supabase, userId, dragonId, delta) : { achievements: [] };
+    if (adjust.error) return { error: adjust.error };
     const row = await upsertContributionRow(supabase, userId, dragonId, amount, transactionId);
     if (row.error) return { error: row.error };
-    return { success: true };
+    return { success: true, achievements: adjust.achievements };
   }
 
   const revert = await adjustDragonAmount(supabase, userId, previousDragonId as string, -previousAmount);
@@ -146,7 +165,7 @@ export async function syncDragonLinkForTransaction(
   if (apply.error) return { error: apply.error };
   const row = await upsertContributionRow(supabase, userId, dragonId as string, amount, transactionId);
   if (row.error) return { error: row.error };
-  return { success: true };
+  return { success: true, achievements: [...revert.achievements, ...apply.achievements] };
 }
 
 /**
@@ -166,9 +185,9 @@ export async function revertDragonLinkForTransaction(
     .eq("user_id", userId)
     .single<{ dragon_id: string | null; amount: number }>();
   if (fetchError || !transaction) return { error: "No se encontró el movimiento." };
-  if (!transaction.dragon_id) return { success: true };
+  if (!transaction.dragon_id) return { success: true, achievements: [] };
 
   const revert = await adjustDragonAmount(supabase, userId, transaction.dragon_id, -Number(transaction.amount));
   if (revert.error) return { error: revert.error };
-  return { success: true };
+  return { success: true, achievements: revert.achievements };
 }

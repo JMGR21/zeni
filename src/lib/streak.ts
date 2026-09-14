@@ -54,3 +54,50 @@ export function computeBestStreak(activeDates: Set<string>): number {
 
   return best;
 }
+
+function daysBetween(fromKey: string, toKey: string): number {
+  const [fy, fm, fd] = fromKey.split("-").map(Number);
+  const [ty, tm, td] = toKey.split("-").map(Number);
+  const fromUTC = Date.UTC(fy, fm - 1, fd);
+  const toUTC = Date.UTC(ty, tm - 1, td);
+  return Math.round((toUTC - fromUTC) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Racha activa "flexible" para los logros de Entrenamiento (Categoría A del
+ * Sistema de Logros) — distinta de `computeCurrentStreak` de arriba: no
+ * exige actividad diaria, solo se reinicia si pasan 7+ días consecutivos
+ * sin ningún registro (incluyendo el hueco entre el último registro y
+ * `today`). Si no está rota, la longitud es la cantidad de días desde el
+ * inicio de la racha activa hasta `today` (inclusive).
+ */
+export function computeActiveStreakDays(activityDates: Date[], today: Date): number {
+  if (activityDates.length === 0) return 0;
+
+  const sortedDays = Array.from(new Set(activityDates.map(toISODate))).sort();
+  const todayKey = toISODate(today);
+  const lastDayKey = sortedDays[sortedDays.length - 1];
+
+  if (daysBetween(lastDayKey, todayKey) >= 7) return 0;
+
+  let startIndex = sortedDays.length - 1;
+  for (let i = sortedDays.length - 1; i > 0; i--) {
+    if (daysBetween(sortedDays[i - 1], sortedDays[i]) >= 7) break;
+    startIndex = i - 1;
+  }
+
+  return daysBetween(sortedDays[startIndex], todayKey) + 1;
+}
+
+// Casos de referencia para computeActiveStreakDays (ver también
+// src/lib/streak.test.ts):
+// 1. Racha continua sin huecos: actividad todos los días del 1 al 10,
+//    today = día 10 -> streak = 10.
+// 2. Huecos pequeños (3-4 días) no rompen la racha: actividad en los días
+//    1, 5, 9 (huecos de 3-4 días), today = día 9 -> streak = 9 (cuenta
+//    desde el día 1, el inicio de la racha activa).
+// 3. Racha rota por un hueco de 7+ días en medio: actividad en el día 1 y
+//    luego el día 10 (hueco de 9 días), today = día 10 -> streak = 1 (solo
+//    cuenta desde el día 10, el hueco anterior reinició la racha).
+// 4. Racha actualmente rota por inactividad reciente: última actividad hace
+//    10 días, today = ahora -> streak = 0 (el hueco hasta hoy ya es de 7+).

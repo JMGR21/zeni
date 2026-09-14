@@ -4,11 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { getInstitution } from "@/lib/institutions";
 import { toISODateString } from "@/lib/weekly-xp";
+import { grantAchievement } from "@/lib/grant-achievement";
+import { projectDebt } from "@/lib/debt-projection";
+import { insertTransaction } from "@/lib/create-transaction";
+import type { AchievementDefinition } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
 
 export type CreateDragonActionState = { error?: string; success?: boolean };
-export type ContributeActionState = { error?: string; success?: boolean };
-export type FinancingActionState = { error?: string; success?: boolean };
+export type ContributeActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
+export type FinancingActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 export type UpdateDragonActionState = { error?: string; success?: boolean };
 export type DeleteDragonActionState = { error?: string; success?: boolean };
 
@@ -148,23 +152,21 @@ export async function contributeToDragon(
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
   let transactionId: string | null = null;
+  const achievements: AchievementDefinition[] = [];
   if (!skipTransaction) {
     const description = dragonType === "debt" ? `Pago a ${dragonName}` : `Abono a ${dragonName}`;
-    const { data: transaction, error: insertError } = await supabase
-      .from("transactions")
-      .insert({
-        user_id: user.id,
-        type: "expense",
-        amount,
-        category_id: null,
-        description,
-        occurred_on: toISODateString(new Date()),
-        dragon_id: dragonId,
-      })
-      .select("id")
-      .single<{ id: string }>();
-    if (insertError || !transaction) return { error: insertError?.message ?? "No se pudo registrar el movimiento." };
-    transactionId = transaction.id;
+    const inserted = await insertTransaction(supabase, {
+      userId: user.id,
+      type: "expense",
+      amount,
+      categoryId: null,
+      description,
+      occurredOn: toISODateString(new Date()),
+      dragonId,
+    });
+    if (!inserted.success) return { error: inserted.error };
+    transactionId = inserted.id;
+    achievements.push(...inserted.achievements);
     revalidatePath("/transactions");
     revalidatePath("/dashboard");
   }
@@ -177,9 +179,10 @@ export async function contributeToDragon(
     previousAmount: 0,
   });
   if (result.error) return { error: result.error };
+  achievements.push(...(result.achievements ?? []));
 
   revalidatePath("/dragons");
-  return { success: true };
+  return { success: true, achievements };
 }
 
 export async function updateDebtFinancing(
@@ -232,6 +235,20 @@ export async function updateDebtFinancing(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
+  const { data: previousDragon } = await supabase
+    .from("dragons")
+    .select("current_amount, target_amount, interest_rate, minimum_payment, extra_payment")
+    .eq("id", dragonId)
+    .eq("user_id", user.id)
+    .eq("type", "debt")
+    .single<{
+      current_amount: number;
+      target_amount: number;
+      interest_rate: number | null;
+      minimum_payment: number | null;
+      extra_payment: number;
+    }>();
+
   const { error: updateError } = await supabase
     .from("dragons")
     .update({
@@ -246,8 +263,47 @@ export async function updateDebtFinancing(
     .eq("type", "debt");
   if (updateError) return { error: updateError.message };
 
+  const achievements: AchievementDefinition[] = [];
+  if (previousDragon) {
+    const pendingBalance = previousDragon.target_amount - previousDragon.current_amount;
+    const previousProjection = projectDebt({
+      pendingBalance,
+      annualRate: previousDragon.interest_rate,
+      minimumPayment: previousDragon.minimum_payment,
+      extraPayment: previousDragon.extra_payment,
+    });
+    const nextProjection = projectDebt({
+      pendingBalance,
+      annualRate: interestRate,
+      minimumPayment,
+      extraPayment,
+    });
+    if (previousProjection.status !== "payable" && nextProjection.status === "payable") {
+      const result = await grantAchievement(supabase, user.id, "deuda-rescatada");
+      if (result.granted) achievements.push(result.achievement);
+    }
+  }
+
   revalidatePath("/dragons");
-  return { success: true };
+  return { success: true, achievements };
+}
+
+/**
+ * "Decisión Informada" (Categoría H): se dispara desde el cliente
+ * (`ComparatorUsageTracker`) una vez que el comparador avalancha/bola de
+ * nieve realmente se muestra en pantalla (2+ Dragones de deuda activos).
+ * Devuelve el logro (si se otorgó) para que el tracker lo muestre como
+ * toast igual que el resto de puntos de entrada.
+ */
+export async function recordComparatorUsage(): Promise<AchievementDefinition[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const result = await grantAchievement(supabase, user.id, "decision-informada");
+  return result.granted ? [result.achievement] : [];
 }
 
 export async function swapDragonPriority(dragonId: string, otherDragonId: string) {

@@ -8,6 +8,7 @@ import { contributeToDragon, type ContributeActionState } from "@/app/(app)/drag
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 const initialState: ContributeActionState = {};
 
@@ -44,6 +45,7 @@ export function ContributeDragonDialog({
   const [amount, setAmount] = useState("");
   const [skipTransaction, setSkipTransaction] = useState(false);
   const [state, formAction] = useActionState(contributeToDragon, initialState);
+  useAchievementToasts(state.achievements);
 
   const [handledState, setHandledState] = useState(state);
   if (state !== handledState) {

@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/budget", label: "Presupuesto" },
   { href: "/dragons", label: "Dragones" },
   { href: "/training", label: "Entrenamiento" },
+  { href: "/achievements", label: "Logros" },
   { href: "/categories", label: "Categorías" },
 ] as const;
 

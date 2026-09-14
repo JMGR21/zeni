@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
 import { projectDebt } from "@/lib/debt-projection";
 import { getInstitution, getReferenceRate, INSTITUTIONS } from "@/lib/institutions";
+import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
 const initialState: FinancingActionState = {};
 
@@ -403,6 +404,7 @@ function DebtFinancingWizard({
   onSuccess: () => void;
 }) {
   const [state, formAction] = useActionState(updateDebtFinancing, initialState);
+  useAchievementToasts(state.achievements);
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
 

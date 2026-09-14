@@ -6,8 +6,11 @@ import { revalidatePath } from "next/cache";
 import { revertDragonLinkForTransaction, syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { grantXp } from "@/lib/grant-xp";
 import { getWeekDedupeKey, getWeekStart, getWeeklyXpTierAmount, resolveWeeklyXpAction, toISODateString } from "@/lib/weekly-xp";
+import { evaluateIncomeTransactionAchievements, evaluateTrainingAchievements } from "@/lib/achievement-engine";
+import { insertTransaction } from "@/lib/create-transaction";
+import type { AchievementDefinition } from "@/lib/achievements";
 
-export type AddTransactionActionState = { error?: string; success?: boolean };
+export type AddTransactionActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 
 function getField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -43,20 +46,17 @@ export async function addTransaction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
-  const { data: inserted, error } = await supabase
-    .from("transactions")
-    .insert({
-      user_id: user.id,
-      category_id: categoryId || null,
-      type,
-      amount,
-      description: description || null,
-      occurred_on: occurredOn,
-      dragon_id: dragonId || null,
-    })
-    .select("id")
-    .single<{ id: string }>();
-  if (error || !inserted) return { error: error?.message ?? "No se pudo registrar el movimiento." };
+  const inserted = await insertTransaction(supabase, {
+    userId: user.id,
+    type,
+    amount,
+    categoryId: categoryId || null,
+    description: description || null,
+    occurredOn,
+    dragonId: dragonId || null,
+  });
+  if (!inserted.success) return { error: inserted.error };
+  const achievements: AchievementDefinition[] = [...inserted.achievements];
 
   if (dragonId) {
     const syncResult = await syncDragonLinkForTransaction(supabase, user.id, {
@@ -67,17 +67,22 @@ export async function addTransaction(
       previousAmount: 0,
     });
     if (syncResult.error) return { error: syncResult.error };
+    achievements.push(...(syncResult.achievements ?? []));
     revalidatePath("/dragons");
   }
 
   await grantDailyAndWeeklyXp(supabase, user.id);
+  achievements.push(...(await evaluateTrainingAchievements(supabase, user.id)));
+  if (type === "income") {
+    achievements.push(...(await evaluateIncomeTransactionAchievements(supabase, user.id, categoryId || null)));
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
-  return { success: true };
+  return { success: true, achievements };
 }
 
-export type UpdateTransactionActionState = { error?: string; success?: boolean };
+export type UpdateTransactionActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 
 export async function updateTransaction(
   _previousState: UpdateTransactionActionState,
@@ -145,7 +150,7 @@ export async function updateTransaction(
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
-  return { success: true };
+  return { success: true, achievements: syncResult.achievements ?? [] };
 }
 
 export type DeleteTransactionActionState = { error?: string; success?: boolean };

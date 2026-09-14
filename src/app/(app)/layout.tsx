@@ -1,5 +1,6 @@
 import { AppFooter } from "@/components/app-footer";
 import { AppHeader } from "@/components/app-header";
+import { Toaster } from "@/components/ui/sonner";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -14,6 +15,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <AppHeader />
       {children}
       <AppFooter />
+      <Toaster />
     </div>
   );
 }
