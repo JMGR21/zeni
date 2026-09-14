@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Deno runtime, no Next.js/Node — separate toolchain, not part of this lint config.
+    "supabase/functions/**",
   ]),
 ]);
 

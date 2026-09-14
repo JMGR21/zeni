@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/transactions", label: "Movimientos" },
   { href: "/budget", label: "Presupuesto" },
   { href: "/dragons", label: "Dragones" },
+  { href: "/recurring", label: "Recurrentes" },
   { href: "/training", label: "Entrenamiento" },
   { href: "/achievements", label: "Logros" },
   { href: "/categories", label: "Categorías" },

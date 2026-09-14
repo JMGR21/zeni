@@ -6,6 +6,7 @@ import { AuraIcon } from "@/components/aura-icon";
 import { KiEvolutionChart, type KiScorePoint } from "@/components/ki-evolution-chart";
 import { KiGauge } from "@/components/ki-gauge";
 import { LevelBadge } from "@/components/level-badge";
+import { PendingRecurringOccurrences, type PendingOccurrence } from "@/components/pending-recurring-occurrences";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { TransformationOverlay } from "@/components/transformation-overlay";
 import { getKiLevel, getKiProgressToNextLevel } from "@/lib/ki";
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
     { data: dragons },
     kiResult,
     { data: kiHistory },
+    { data: pendingOccurrenceRows },
   ] = await Promise.all([
     supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
     supabase
@@ -61,7 +63,31 @@ export default async function DashboardPage() {
     supabase.from("dragons").select("id, name").eq("status", "active").order("name").returns<DragonOption[]>(),
     user ? calculateKi(user.id) : Promise.resolve(null),
     supabase.from("ki_scores").select("year_month, score").order("year_month", { ascending: true }).returns<KiScorePoint[]>(),
+    supabase
+      .from("recurring_transaction_occurrences")
+      .select("id, scheduled_date, status, recurring_transactions(name, type, amount)")
+      .in("status", ["pending", "insufficient_funds"])
+      .order("scheduled_date")
+      .returns<
+        {
+          id: string;
+          scheduled_date: string;
+          status: "pending" | "insufficient_funds";
+          recurring_transactions: { name: string; type: "income" | "expense"; amount: number } | null;
+        }[]
+      >(),
   ]);
+
+  const pendingOccurrences: PendingOccurrence[] = (pendingOccurrenceRows ?? [])
+    .filter((row) => row.recurring_transactions !== null)
+    .map((row) => ({
+      id: row.id,
+      scheduled_date: row.scheduled_date,
+      status: row.status,
+      name: row.recurring_transactions!.name,
+      type: row.recurring_transactions!.type,
+      amount: row.recurring_transactions!.amount,
+    }));
 
   let transformationJustHappened = false;
   const newAchievements: AchievementDefinition[] = [];
@@ -162,6 +188,8 @@ export default async function DashboardPage() {
           </p>
         </div>
       </section>
+
+      <PendingRecurringOccurrences occurrences={pendingOccurrences} />
 
       <section className="mx-auto w-full max-w-4xl px-6 pb-16">
         <div className="flex items-center justify-between">
