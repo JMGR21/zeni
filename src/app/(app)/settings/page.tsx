@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { AvatarPickerDialog } from "@/components/avatar-picker-dialog";
+import { ResetAccountDialog } from "@/components/reset-account-dialog";
 import { SettingsForm } from "@/components/settings-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,6 +53,16 @@ export default async function SettingsPage() {
             Cerrar sesión
           </button>
         </form>
+      </div>
+
+      <div className="mt-8 space-y-3 rounded-xl border border-ki-survival/30 bg-ki-survival/5 p-4">
+        <div>
+          <p className="font-mono text-[11px] tracking-widest text-ki-survival uppercase">Zona de peligro</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            Borra toda tu información financiera y deja la cuenta como recién creada.
+          </p>
+        </div>
+        <ResetAccountDialog />
       </div>
     </section>
   );

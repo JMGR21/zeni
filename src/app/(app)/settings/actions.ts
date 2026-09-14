@@ -40,6 +40,40 @@ export async function updateProfile(
   return { success: true, achievements: result.granted ? [result.achievement] : [] };
 }
 
+export type ResetAccountActionState = { error?: string; success?: boolean };
+
+export async function resetAccount(
+  _previousState: ResetAccountActionState,
+  formData: FormData,
+): Promise<ResetAccountActionState> {
+  const password = getField(formData, "password");
+  if (!password) return { error: "Ingresa tu contraseña." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });
+  if (authError) return { error: "Contraseña incorrecta." };
+
+  const { error: rpcError } = await supabase.rpc("reset_account");
+  if (rpcError) return { error: rpcError.message };
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/budget");
+  revalidatePath("/dragons");
+  revalidatePath("/training");
+  revalidatePath("/categories");
+  revalidatePath("/recurring");
+  revalidatePath("/achievements");
+
+  return { success: true };
+}
+
 export async function updateAvatar(avatarId: string) {
   const supabase = await createClient();
   const {
