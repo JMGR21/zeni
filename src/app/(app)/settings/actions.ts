@@ -74,6 +74,27 @@ export async function resetAccount(
   return { success: true };
 }
 
+export async function updateMonthStartDay(monthStartDay: number) {
+  const day = Math.min(28, Math.max(1, Math.floor(monthStartDay)));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error, count } = await supabase
+    .from("profiles")
+    .update({ month_start_day: day }, { count: "exact" })
+    .eq("id", user.id);
+  if (error || !count) {
+    console.error("[updateMonthStartDay] failed to persist month_start_day", error?.message ?? "0 rows updated");
+    return;
+  }
+
+  revalidatePath("/dashboard");
+}
+
 export async function updateAvatar(avatarId: string) {
   const supabase = await createClient();
   const {

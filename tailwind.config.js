@@ -8,6 +8,30 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./node_modules/@tremor/**/*.{js,ts,jsx,tsx}"],
+  // Tremor arma sus clases de color por categoría en runtime
+  // (`fill-${color}-500`, `bg-${color}-500`, `text-${color}-500`, cada una
+  // con su variante `dark:`) — Tailwind v4 no puede detectarlas de forma
+  // estática. Para el BarChart de Ingresos/Gastos del dashboard (único
+  // lugar del proyecto que pasa `colors` a un componente de Tremor) se
+  // fija un set cerrado de 2 colores (emerald=ingresos, rose=gastos, mismo
+  // significado que el verde/rojo ya usado en StatTile) y se safelistea
+  // exactamente esas clases — a diferencia del DonutChart descartado en
+  // Fase 10 (paleta de 22 colores, imposible de safelistear con
+  // confianza), este es un par fijo y pequeño.
+  safelist: [
+    "fill-emerald-500",
+    "dark:fill-emerald-500",
+    "bg-emerald-500",
+    "dark:bg-emerald-500",
+    "text-emerald-500",
+    "dark:text-emerald-500",
+    "fill-rose-500",
+    "dark:fill-rose-500",
+    "bg-rose-500",
+    "dark:bg-rose-500",
+    "text-rose-500",
+    "dark:text-rose-500",
+  ],
   theme: {
     extend: {
       colors: {

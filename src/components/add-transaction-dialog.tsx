@@ -356,11 +356,13 @@ export function AddTransactionDialog({
   dragons = [],
   mode = "create",
   transaction,
+  variant = "fab",
 }: {
   categories: TransactionCategory[];
   dragons?: DragonOption[];
   mode?: "create" | "edit";
   transaction?: EditableTransaction;
+  variant?: "fab" | "inline";
 }) {
   const [open, setOpen] = useState(false);
   const isEdit = mode === "edit";
@@ -378,6 +380,15 @@ export function AddTransactionDialog({
           }
         >
           <Pencil className="size-4" />
+        </DialogTrigger>
+      ) : variant === "inline" ? (
+        <DialogTrigger
+          render={
+            <button className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ki-awakening px-4 text-sm font-medium text-void transition-colors hover:bg-ki-awakening/90" />
+          }
+        >
+          <Plus className="size-4" />
+          Registrar movimiento
         </DialogTrigger>
       ) : (
         <DialogTrigger

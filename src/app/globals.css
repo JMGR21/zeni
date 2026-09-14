@@ -13,15 +13,22 @@
   --font-display: var(--font-rajdhani);
   --font-heading: var(--font-display);
 
-  /* Sistema de diseño Zeni: fondo "espacio nocturno" + acento dinámico de Ki. */
-  --color-void: #0b0d14;
-  --color-surface: #151824;
+  /* Sistema de diseño Zeni: fondo "espacio nocturno" + acento dinámico de Ki.
+     Paleta recalibrada hacia una estética real de Dragon Ball (ver nota
+     "Recalibración de paleta — Aura Saiyan" en Sistema de diseño): void y
+     surface pasan de negro-azulado frío a negro cálido con matiz púrpura, y
+     los tonos de Ki ganan croma hacia naranja/dorado de aura en vez del
+     ámbar genérico anterior. ki-saiyan y ki-saiyan2 no cambian — ya leían
+     como dorado SSJ y azul eléctrico. ki-survival tampoco cambia — su tono
+     ya está afinado para el contraste WCAG documentado abajo. */
+  --color-void: #120a14;
+  --color-surface: #1c1220;
   --color-ink: #edeff4;
-  --color-ink-muted: #7d8296;
+  --color-ink-muted: #85808c;
   --color-ki-survival: #e24646; /* ligeramente más claro que el rojo original (#e23b3b) — como texto sobre bg-void el original quedaba en ~4.55:1, al límite de WCAG AA (4.5:1); este tono da más margen sin cambiar el tono de "alerta roja" */
-  --color-ki-dormant: #6b7280;
-  --color-ki-awakening: #f0a93a;
-  --color-ki-warrior: #ff7a3d;
+  --color-ki-dormant: #6f665f;
+  --color-ki-awakening: #f7a634;
+  --color-ki-warrior: #ff6a2e;
   --color-ki-saiyan: #ffd23f;
   --color-ki-saiyan2: #5fe0f0;
 
