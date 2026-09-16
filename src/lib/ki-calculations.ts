@@ -3,10 +3,13 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 // -20% de balance = 0 puntos, +20% o más = 100 puntos. Sin ingresos no hay
-// forma de confirmar salud financiera, así que se trata como 0.
-export function computeBalanceScore(income: number, expense: number): number {
+// forma de confirmar salud financiera, así que se trata como 0. `balance`
+// es el balance NETO del mes (balance bruto + colchón entrante de un
+// ingreso reservado el mes anterior, ver `monthly-balance.ts`), no
+// necesariamente `income - expense`.
+export function computeBalanceScore(income: number, balance: number): number {
   if (income === 0) return 0;
-  const balanceRatio = (income - expense) / income;
+  const balanceRatio = balance / income;
   return clamp(((balanceRatio + 0.2) / 0.4) * 100, 0, 100);
 }
 
@@ -19,14 +22,14 @@ export function computeDebtScore(income: number, debtPayments: number): number {
   return clamp(100 - (debtRatio / 0.5) * 100, 0, 100);
 }
 
-export function computeSaludActual(income: number, expense: number, debtPayments: number): number {
-  return (computeBalanceScore(income, expense) + computeDebtScore(income, debtPayments)) / 2;
+export function computeSaludActual(income: number, netBalance: number, debtPayments: number): number {
+  return (computeBalanceScore(income, netBalance) + computeDebtScore(income, debtPayments)) / 2;
 }
 
 export type MomentumInputs = {
   debtContributions: number;
   savingsContributions: number;
-  balance: number;
+  balance: number; // balance NETO del mes (ver `computeBalanceScore`)
 };
 
 // Si el mes anterior fue 0, un salto a positivo es una mejora completa

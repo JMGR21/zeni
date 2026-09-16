@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Info } from "lucide-react";
 import { cn } from "cn";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export type StatDelta = {
   percent: number;
@@ -18,12 +19,23 @@ export function StatTile({
   value,
   delta,
   deltaLabel = "vs. mes anterior",
+  infoTooltip,
+  bufferBreakdown,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   delta?: StatDelta | null;
   deltaLabel?: string;
+  // Explicación breve mostrada en un Popover junto a la etiqueta — usado
+  // por el colchón del Saldo Disponible para que el desglose no se sienta
+  // como un número inconsistente sin contexto.
+  infoTooltip?: string;
+  // Cuando el periodo cerró en negativo y el Saldo Disponible acumulado
+  // cubrió algo del bache (ver `monthly-balance.ts`), sustituye el número
+  // simple por bruto/cubierto/neto — el bruto nunca se oculta. `uncovered`
+  // solo aparece si el Saldo Disponible no alcanzó a cubrir todo el bache.
+  bufferBreakdown?: { rawBalance: string; covered: string; netBalance: string; uncovered?: string };
 }) {
   const isIncrease = delta ? delta.percent > 0 : null;
   const isGood =
@@ -38,8 +50,47 @@ export function StatTile({
       <div className="flex items-center gap-2">
         <span className="text-ki-awakening">{icon}</span>
         <span className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">{label}</span>
+        {infoTooltip && (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Más información"
+                  className="text-ink-muted/60 hover:text-ink-muted"
+                />
+              }
+            >
+              <Info className="size-3" aria-hidden="true" />
+            </PopoverTrigger>
+            <PopoverContent className="max-w-64 text-xs text-ink-muted">{infoTooltip}</PopoverContent>
+          </Popover>
+        )}
       </div>
-      <p className="mt-2 font-mono text-2xl text-ink">{value}</p>
+      {bufferBreakdown ? (
+        <div className="mt-2 space-y-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs text-ink-muted">Balance bruto</span>
+            <span className="font-mono text-sm text-ink">{bufferBreakdown.rawBalance}</span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs text-ink-muted">Cubierto con tu Saldo Disponible</span>
+            <span className="font-mono text-sm text-ki-saiyan">{bufferBreakdown.covered}</span>
+          </div>
+          {bufferBreakdown.uncovered && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-ink-muted">Aún descubierto</span>
+              <span className="font-mono text-sm text-ki-survival">{bufferBreakdown.uncovered}</span>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between gap-2 border-t border-ink-muted/10 pt-1">
+            <span className="text-xs font-medium text-ink-muted">Balance neto</span>
+            <span className="font-mono text-lg text-ink">{bufferBreakdown.netBalance}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 font-mono text-2xl text-ink">{value}</p>
+      )}
       {delta && delta.percent !== 0 ? (
         <p
           className={cn(
