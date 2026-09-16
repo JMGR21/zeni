@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { AvatarPickerDialog } from "@/components/avatar-picker-dialog";
+import { InitialBalanceField } from "@/components/initial-balance-field";
 import { ResetAccountDialog } from "@/components/reset-account-dialog";
 import { SettingsForm } from "@/components/settings-form";
 import { createClient } from "@/lib/supabase/server";
@@ -15,9 +16,9 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, currency, avatar_id")
+    .select("name, currency, avatar_id, initial_balance")
     .eq("id", user.id)
-    .single<{ name: string | null; currency: string | null; avatar_id: string | null }>();
+    .single<{ name: string | null; currency: string | null; avatar_id: string | null; initial_balance: number }>();
 
   return (
     <section className="mx-auto w-full max-w-md px-6 py-10">
@@ -41,6 +42,10 @@ export default async function SettingsPage() {
 
       <div className="mt-6">
         <SettingsForm initialName={profile?.name ?? ""} initialCurrency={profile?.currency ?? "MXN"} />
+      </div>
+
+      <div className="mt-6">
+        <InitialBalanceField initialBalance={profile?.initial_balance ?? 0} />
       </div>
 
       <div className="mt-8 border-t border-ink-muted/10 pt-6">

@@ -74,6 +74,28 @@ export async function resetAccount(
   return { success: true };
 }
 
+export async function updateInitialBalance(initialBalance: number) {
+  const amount = Number.isFinite(initialBalance) ? initialBalance : 0;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error, count } = await supabase
+    .from("profiles")
+    .update({ initial_balance: amount }, { count: "exact" })
+    .eq("id", user.id);
+  if (error || !count) {
+    console.error("[updateInitialBalance] failed to persist initial_balance", error?.message ?? "0 rows updated");
+    return;
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
 export async function updateMonthStartDay(monthStartDay: number) {
   const day = Math.min(28, Math.max(1, Math.floor(monthStartDay)));
 
