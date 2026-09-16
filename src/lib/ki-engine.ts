@@ -3,6 +3,16 @@ import { getSuggestedBudget, resolveBudgetedAmount, wasMonthWithinBudget, type B
 import { getKiLevel, getKiLevelRank, type KiLevel } from "@/lib/ki";
 import { grantXp } from "@/lib/grant-xp";
 import {
+  evaluateBudgetRecoveryAchievement,
+  evaluateBudgetStreakAchievements,
+  evaluateHabitAchievements,
+  evaluateIncomeMonthlyAchievements,
+  evaluateKiLevelAchievements,
+  evaluatePhoenixRecoveryAchievement,
+  evaluateTransformationAchievements,
+} from "@/lib/achievement-engine";
+import type { AchievementDefinition } from "@/lib/achievements";
+import {
   computeConstancia,
   computeFinalScore,
   computeMomentum,
@@ -231,12 +241,18 @@ export async function awardMonthlyXp(
   userId: string,
   currentLevelLabel: string,
   referenceDate: Date = new Date(),
-): Promise<{ transformationJustHappened: boolean }> {
+): Promise<{ transformationJustHappened: boolean; achievements: AchievementDefinition[] }> {
   const supabase = await createClient();
+  const achievements: AchievementDefinition[] = [];
 
   const currentMonthKey = toISODate(monthStart(referenceDate, 0));
   const previousMonthStart = monthStart(referenceDate, 1);
   const previousMonthKey = toISODate(previousMonthStart);
+
+  achievements.push(...(await evaluateKiLevelAchievements(supabase, userId, currentLevelLabel, currentMonthKey)));
+  achievements.push(...(await evaluatePhoenixRecoveryAchievement(supabase, userId)));
+  achievements.push(...(await evaluateHabitAchievements(supabase, userId, referenceDate)));
+  achievements.push(...(await evaluateIncomeMonthlyAchievements(supabase, userId, referenceDate)));
 
   const budgetDedupeKey = `budget:${previousMonthKey}`;
   const { data: existingBudgetEvent } = await supabase
@@ -250,6 +266,8 @@ export async function awardMonthlyXp(
     const withinBudget = await wasMonthWithinBudget(supabase, userId, previousMonthStart);
     if (withinBudget) {
       await grantXp(supabase, userId, "budget_month", 100, budgetDedupeKey);
+      achievements.push(...(await evaluateBudgetStreakAchievements(supabase, userId, previousMonthStart)));
+      achievements.push(...(await evaluateBudgetRecoveryAchievement(supabase, userId, previousMonthStart)));
     }
   }
 
@@ -267,8 +285,11 @@ export async function awardMonthlyXp(
     if (previousRank !== null && currentRank !== null && currentRank > previousRank) {
       const { granted } = await grantXp(supabase, userId, "transformation", 300, `transformation:${currentMonthKey}`);
       transformationJustHappened = granted;
+      if (granted) {
+        achievements.push(...(await evaluateTransformationAchievements(supabase, userId)));
+      }
     }
   }
 
-  return { transformationJustHappened };
+  return { transformationJustHappened, achievements };
 }

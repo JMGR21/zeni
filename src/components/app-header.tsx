@@ -1,43 +1,38 @@
-import { User } from "lucide-react";
-import Link from "next/link";
-import { cn } from "cn";
-import { signOut } from "@/app/(auth)/actions";
+import Image from "next/image";
+import { AppNav } from "@/components/app-nav";
+import { ProfileMenu } from "@/components/profile-menu";
+import { createClient } from "@/lib/supabase/server";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/budget", label: "Presupuesto" },
-  { href: "/dragons", label: "Dragones" },
-] as const;
+// Vive en el layout compartido de (app), no en cada página, para que se
+// monte una sola vez y no participe de los Suspense boundaries de
+// loading.tsx — la nav debe sentirse fija, como el shell de una app, no
+// recargarse junto con el contenido de cada pantalla.
+export async function AppHeader() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-export function AppHeader({ active }: { active: "dashboard" | "budget" | "dragons" }) {
+  let avatarId: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("avatar_id")
+      .eq("id", user.id)
+      .single<{ avatar_id: string | null }>();
+    avatarId = profile?.avatar_id ?? null;
+  }
+
   return (
     <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
       <div className="flex items-center gap-8">
-        <span className="font-display text-xl font-bold tracking-[0.2em]">ZENI</span>
-        <nav className="flex items-center gap-5">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "text-sm font-medium transition-colors",
-                active === item.href.slice(1) ? "text-ink" : "text-ink-muted hover:text-ink",
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <span className="flex items-center gap-2">
+          <Image src="/brand/zeni-icon.png" alt="" width={24} height={24} className="size-6" />
+          <span className="font-display text-xl font-bold tracking-[0.2em]">ZENI</span>
+        </span>
+        <AppNav />
       </div>
-      <form action={signOut}>
-        <button
-          type="submit"
-          aria-label="Cerrar sesión"
-          className="flex size-9 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-        >
-          <User className="size-5" />
-        </button>
-      </form>
+      <ProfileMenu avatarId={avatarId} />
     </header>
   );
 }

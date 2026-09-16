@@ -52,8 +52,16 @@ default_pool_size = 20
 # Maximum number of client connections allowed.
 max_client_conn = 100
 
-# [db.vault]
-# secret_key = "env(SECRET_VALUE)"
+# Sincronizados a Supabase Vault por `supabase db push` (antes de aplicar
+# migraciones) — así el valor real de la secret key nunca queda escrito en
+# un archivo versionado en git, solo el nombre de la variable de entorno.
+# El valor de `process_recurring_secret_key` vive en un `.env` en la raíz
+# del proyecto (gitignored, no confundir con `.env.local`), no en este
+# archivo. Referenciados desde la migración
+# `schedule_recurring_transactions_processing.sql`.
+[db.vault]
+process_recurring_project_url = "https://itplljoeyrhegxfylgfr.supabase.co"
+process_recurring_secret_key = "env(RECURRING_PROCESSOR_SECRET_KEY)"
 
 [db.migrations]
 # If disabled, migrations will be skipped during a db push or reset.
@@ -413,3 +421,18 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Llamada exclusivamente por pg_cron/pg_net (server-to-server, ver la
+# migración de la programación), nunca desde un cliente — el código usa
+# `auth: 'secret'`, que ya exige la secret key en el header `apikey`, así
+# que la verificación de JWT del gateway (`verify_jwt`) se desactiva aquí.
+[functions.process-recurring-transactions]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-recurring-transactions/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/process-recurring-transactions/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/process-recurring-transactions/*.html" ]

@@ -1,14 +1,20 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { getInstitution } from "@/lib/institutions";
-import { getSphereProgress } from "@/lib/spheres";
-import { grantXp } from "@/lib/grant-xp";
+import { toISODateString } from "@/lib/weekly-xp";
+import { grantAchievement } from "@/lib/grant-achievement";
+import { projectDebt } from "@/lib/debt-projection";
+import { insertTransaction } from "@/lib/create-transaction";
+import type { AchievementDefinition } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
 
 export type CreateDragonActionState = { error?: string; success?: boolean };
-export type ContributeActionState = { error?: string; success?: boolean };
-export type FinancingActionState = { error?: string; success?: boolean };
+export type ContributeActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
+export type FinancingActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
+export type UpdateDragonActionState = { error?: string; success?: boolean };
+export type DeleteDragonActionState = { error?: string; success?: boolean };
 
 function getField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -58,6 +64,71 @@ export async function createDragon(
   return { success: true };
 }
 
+export async function updateDragon(
+  _previousState: UpdateDragonActionState,
+  formData: FormData,
+): Promise<UpdateDragonActionState> {
+  const dragonId = getField(formData, "id");
+  if (!dragonId) return { error: "Dragón inválido." };
+
+  const name = getField(formData, "name");
+  if (!name) return { error: "Ingresa un nombre." };
+
+  const targetAmount = Number(getField(formData, "target_amount"));
+  if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
+    return { error: "Ingresa una meta válida." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { data: dragon, error: fetchError } = await supabase
+    .from("dragons")
+    .select("current_amount")
+    .eq("id", dragonId)
+    .eq("user_id", user.id)
+    .single<{ current_amount: number }>();
+  if (fetchError || !dragon) return { error: "No se encontró el dragón." };
+
+  const { error } = await supabase
+    .from("dragons")
+    .update({
+      name,
+      target_amount: targetAmount,
+      status: dragon.current_amount >= targetAmount ? "completed" : "active",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dragonId)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dragons");
+  return { success: true };
+}
+
+export async function deleteDragon(
+  _previousState: DeleteDragonActionState,
+  formData: FormData,
+): Promise<DeleteDragonActionState> {
+  const dragonId = getField(formData, "id");
+  if (!dragonId) return { error: "Dragón inválido." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase.from("dragons").delete().eq("id", dragonId).eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dragons");
+  return { success: true };
+}
+
 export async function contributeToDragon(
   _previousState: ContributeActionState,
   formData: FormData,
@@ -70,48 +141,48 @@ export async function contributeToDragon(
     return { error: "Ingresa un monto válido." };
   }
 
+  const dragonName = getField(formData, "dragon_name");
+  const dragonType = getField(formData, "dragon_type");
+  const skipTransaction = formData.get("skip_transaction") === "on";
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
-  const { data: dragon, error: fetchError } = await supabase
-    .from("dragons")
-    .select("current_amount, target_amount")
-    .eq("id", dragonId)
-    .eq("user_id", user.id)
-    .single<{ current_amount: number; target_amount: number }>();
-  if (fetchError || !dragon) return { error: "No se encontró el dragón." };
-
-  const spheresBefore = getSphereProgress(dragon.current_amount, dragon.target_amount);
-
-  const nextAmount = dragon.current_amount + amount;
-
-  const { error } = await supabase
-    .from("dragons")
-    .update({
-      current_amount: nextAmount,
-      status: nextAmount >= dragon.target_amount ? "completed" : "active",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", dragonId)
-    .eq("user_id", user.id);
-  if (error) return { error: error.message };
-
-  await supabase.from("dragon_contributions").insert({ dragon_id: dragonId, user_id: user.id, amount });
-
-  const spheresAfter = getSphereProgress(nextAmount, dragon.target_amount);
-  const newlyCompletedIndexes = spheresAfter
-    .map((completed, index) => (completed && !spheresBefore[index] ? index : null))
-    .filter((index): index is number => index !== null);
-
-  for (const sphereIndex of newlyCompletedIndexes) {
-    await grantXp(supabase, user.id, "sphere_completed", 50, `sphere:${dragonId}:${sphereIndex}`);
+  let transactionId: string | null = null;
+  const achievements: AchievementDefinition[] = [];
+  if (!skipTransaction) {
+    const description = dragonType === "debt" ? `Pago a ${dragonName}` : `Abono a ${dragonName}`;
+    const inserted = await insertTransaction(supabase, {
+      userId: user.id,
+      type: "expense",
+      amount,
+      categoryId: null,
+      description,
+      occurredOn: toISODateString(new Date()),
+      dragonId,
+    });
+    if (!inserted.success) return { error: inserted.error };
+    transactionId = inserted.id;
+    achievements.push(...inserted.achievements);
+    revalidatePath("/transactions");
+    revalidatePath("/dashboard");
   }
 
+  const result = await syncDragonLinkForTransaction(supabase, user.id, {
+    transactionId,
+    dragonId,
+    amount,
+    previousDragonId: null,
+    previousAmount: 0,
+  });
+  if (result.error) return { error: result.error };
+  achievements.push(...(result.achievements ?? []));
+
   revalidatePath("/dragons");
-  return { success: true };
+  return { success: true, achievements };
 }
 
 export async function updateDebtFinancing(
@@ -164,6 +235,20 @@ export async function updateDebtFinancing(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
+  const { data: previousDragon } = await supabase
+    .from("dragons")
+    .select("current_amount, target_amount, interest_rate, minimum_payment, extra_payment")
+    .eq("id", dragonId)
+    .eq("user_id", user.id)
+    .eq("type", "debt")
+    .single<{
+      current_amount: number;
+      target_amount: number;
+      interest_rate: number | null;
+      minimum_payment: number | null;
+      extra_payment: number;
+    }>();
+
   const { error: updateError } = await supabase
     .from("dragons")
     .update({
@@ -178,8 +263,47 @@ export async function updateDebtFinancing(
     .eq("type", "debt");
   if (updateError) return { error: updateError.message };
 
+  const achievements: AchievementDefinition[] = [];
+  if (previousDragon) {
+    const pendingBalance = previousDragon.target_amount - previousDragon.current_amount;
+    const previousProjection = projectDebt({
+      pendingBalance,
+      annualRate: previousDragon.interest_rate,
+      minimumPayment: previousDragon.minimum_payment,
+      extraPayment: previousDragon.extra_payment,
+    });
+    const nextProjection = projectDebt({
+      pendingBalance,
+      annualRate: interestRate,
+      minimumPayment,
+      extraPayment,
+    });
+    if (previousProjection.status !== "payable" && nextProjection.status === "payable") {
+      const result = await grantAchievement(supabase, user.id, "deuda-rescatada");
+      if (result.granted) achievements.push(result.achievement);
+    }
+  }
+
   revalidatePath("/dragons");
-  return { success: true };
+  return { success: true, achievements };
+}
+
+/**
+ * "Decisión Informada" (Categoría H): se dispara desde el cliente
+ * (`ComparatorUsageTracker`) una vez que el comparador avalancha/bola de
+ * nieve realmente se muestra en pantalla (2+ Dragones de deuda activos).
+ * Devuelve el logro (si se otorgó) para que el tracker lo muestre como
+ * toast igual que el resto de puntos de entrada.
+ */
+export async function recordComparatorUsage(): Promise<AchievementDefinition[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const result = await grantAchievement(supabase, user.id, "decision-informada");
+  return result.granted ? [result.achievement] : [];
 }
 
 export async function swapDragonPriority(dragonId: string, otherDragonId: string) {

@@ -24,3 +24,12 @@ export function getLevelFromXp(totalXp: number): LevelInfo {
 
   return { level, xpIntoLevel, xpForNextLevel };
 }
+
+// Cuánto XP falta para completar el nivel actual (cruzar al siguiente),
+// dado el XP total ya acumulado. Usado por los logros que "garantizan
+// nivel": se otorga exactamente esta cantidad como XP extra, ni de más ni
+// de menos.
+export function getXpNeededForNextLevel(totalXp: number): number {
+  const { xpIntoLevel, xpForNextLevel } = getLevelFromXp(totalXp);
+  return xpForNextLevel - xpIntoLevel;
+}

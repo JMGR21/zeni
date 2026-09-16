@@ -3,10 +3,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revertDragonLinkForTransaction, syncDragonLinkForTransaction } from "@/lib/sync-dragon-link";
 import { grantXp } from "@/lib/grant-xp";
 import { getWeekDedupeKey, getWeekStart, getWeeklyXpTierAmount, resolveWeeklyXpAction, toISODateString } from "@/lib/weekly-xp";
+import { evaluateIncomeTransactionAchievements, evaluateTrainingAchievements } from "@/lib/achievement-engine";
+import { insertTransaction } from "@/lib/create-transaction";
+import type { AchievementDefinition } from "@/lib/achievements";
 
-export type AddTransactionActionState = { error?: string; success?: boolean };
+export type AddTransactionActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 
 function getField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -34,6 +38,7 @@ export async function addTransaction(
 
   const categoryId = getField(formData, "category_id");
   const description = getField(formData, "description");
+  const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
 
   const supabase = await createClient();
   const {
@@ -41,19 +46,137 @@ export async function addTransaction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
 
-  const { error } = await supabase.from("transactions").insert({
-    user_id: user.id,
-    category_id: categoryId || null,
+  const inserted = await insertTransaction(supabase, {
+    userId: user.id,
     type,
     amount,
+    categoryId: categoryId || null,
     description: description || null,
-    occurred_on: occurredOn,
+    occurredOn,
+    dragonId: dragonId || null,
   });
-  if (error) return { error: error.message };
+  if (!inserted.success) return { error: inserted.error };
+  const achievements: AchievementDefinition[] = [...inserted.achievements];
+
+  if (dragonId) {
+    const syncResult = await syncDragonLinkForTransaction(supabase, user.id, {
+      transactionId: inserted.id,
+      dragonId,
+      amount,
+      previousDragonId: null,
+      previousAmount: 0,
+    });
+    if (syncResult.error) return { error: syncResult.error };
+    achievements.push(...(syncResult.achievements ?? []));
+    revalidatePath("/dragons");
+  }
 
   await grantDailyAndWeeklyXp(supabase, user.id);
+  achievements.push(...(await evaluateTrainingAchievements(supabase, user.id)));
+  if (type === "income") {
+    achievements.push(...(await evaluateIncomeTransactionAchievements(supabase, user.id, categoryId || null)));
+  }
 
   revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return { success: true, achievements };
+}
+
+export type UpdateTransactionActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
+
+export async function updateTransaction(
+  _previousState: UpdateTransactionActionState,
+  formData: FormData,
+): Promise<UpdateTransactionActionState> {
+  const id = getField(formData, "id");
+  if (!id) return { error: "Falta el movimiento a editar." };
+
+  const type = getField(formData, "type");
+  if (type !== "income" && type !== "expense") {
+    return { error: "Selecciona un tipo válido." };
+  }
+
+  const amount = Number(getField(formData, "amount"));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Ingresa un monto válido." };
+  }
+
+  const occurredOn = getField(formData, "occurred_on");
+  if (!occurredOn) {
+    return { error: "Selecciona una fecha." };
+  }
+
+  const categoryId = getField(formData, "category_id");
+  const description = getField(formData, "description");
+  const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("transactions")
+    .select("dragon_id, amount")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single<{ dragon_id: string | null; amount: number }>();
+  if (fetchError || !existing) return { error: "No se encontró el movimiento." };
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({
+      category_id: categoryId || null,
+      type,
+      amount,
+      description: description || null,
+      occurred_on: occurredOn,
+      dragon_id: dragonId || null,
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  const syncResult = await syncDragonLinkForTransaction(supabase, user.id, {
+    transactionId: id,
+    dragonId: dragonId || null,
+    amount,
+    previousDragonId: existing.dragon_id,
+    previousAmount: Number(existing.amount),
+  });
+  if (syncResult.error) return { error: syncResult.error };
+  if (existing.dragon_id || dragonId) revalidatePath("/dragons");
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  return { success: true, achievements: syncResult.achievements ?? [] };
+}
+
+export type DeleteTransactionActionState = { error?: string; success?: boolean };
+
+export async function deleteTransaction(
+  _previousState: DeleteTransactionActionState,
+  formData: FormData,
+): Promise<DeleteTransactionActionState> {
+  const id = getField(formData, "id");
+  if (!id) return { error: "Falta el movimiento a eliminar." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const revertResult = await revertDragonLinkForTransaction(supabase, user.id, id);
+  if (revertResult.error) return { error: revertResult.error };
+
+  const { error } = await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/dragons");
   return { success: true };
 }
 

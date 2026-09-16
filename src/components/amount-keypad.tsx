@@ -9,10 +9,12 @@ export function AmountKeypad({
   value,
   onChange,
   autoFocus,
+  ariaLabel = "Monto",
 }: {
   value: string;
   onChange: (next: string) => void;
   autoFocus?: boolean;
+  ariaLabel?: string;
 }) {
   function pressKey(key: string) {
     if (key === "⌫") {
@@ -34,6 +36,7 @@ export function AmountKeypad({
           value={value}
           onChange={(event) => onChange(sanitizeAmountInput(event.target.value))}
           placeholder="0.00"
+          aria-label={ariaLabel}
           className="w-40 border-none bg-transparent text-center font-mono text-4xl text-ink outline-none placeholder:text-ink-muted/40"
         />
       </div>
@@ -43,6 +46,7 @@ export function AmountKeypad({
             key={key}
             type="button"
             onClick={() => pressKey(key)}
+            aria-label={key === "⌫" ? "Borrar último dígito" : undefined}
             className={cn(
               "h-12 rounded-lg border border-ink-muted/10 bg-void/40 font-mono text-lg transition-colors active:scale-95",
               key === "⌫" ? "text-ink-muted hover:border-ink-muted/30" : "text-ink hover:border-ki-awakening/40",

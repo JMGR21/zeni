@@ -7,7 +7,13 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
 });
 
-export function DragonsSummary({ dragons }: { dragons: Dragon[] }) {
+export function DragonsSummary({
+  dragons,
+  variant = "full",
+}: {
+  dragons: Dragon[];
+  variant?: "full" | "compact";
+}) {
   const activeSavings = dragons.filter((dragon) => dragon.type === "savings" && dragon.status === "active");
   const totalSaved = activeSavings.reduce((sum, dragon) => sum + dragon.current_amount, 0);
 
@@ -34,6 +40,21 @@ export function DragonsSummary({ dragons }: { dragons: Dragon[] }) {
   }
 
   if (activeSavings.length === 0 && activeDebts.length === 0) return null;
+
+  if (variant === "compact") {
+    return (
+      <div className="rounded-xl border border-ink-muted/15 bg-void/40 p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-ink-muted">Ahorrado</span>
+          <span className="font-mono text-sm text-ki-saiyan">{currencyFormatter.format(totalSaved)}</span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-xs text-ink-muted">Deuda pendiente</span>
+          <span className="font-mono text-sm text-ki-warrior">{currencyFormatter.format(totalDebtPending)}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-ink-muted/15 bg-void/40 p-5">

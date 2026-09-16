@@ -25,6 +25,21 @@ export function getKiLevel(score: number): KiLevel {
   );
 }
 
+export type KiProgressToNextLevel =
+  | { atMaxLevel: true }
+  | { atMaxLevel: false; nextLevel: KiLevel; pointsNeeded: number };
+
+// Cuántos puntos le faltan al score actual para alcanzar la siguiente
+// etiqueta de Ki. `atMaxLevel: true` cuando ya está en Super Saiyan 2 (no
+// hay "siguiente" nivel al cual apuntar).
+export function getKiProgressToNextLevel(score: number): KiProgressToNextLevel {
+  const clamped = Math.min(100, Math.max(0, score));
+  const currentIndex = KI_LEVELS.findIndex((level) => clamped >= level.min && clamped <= level.max);
+  const nextLevel = KI_LEVELS[currentIndex + 1];
+  if (!nextLevel) return { atMaxLevel: true };
+  return { atMaxLevel: false, nextLevel, pointsNeeded: Math.ceil(nextLevel.min - clamped) };
+}
+
 // Posición de una etiqueta de Ki dentro del orden ascendente (0 = Modo
 // Supervivencia). Usado para detectar Transformaciones comparando el rango
 // de un mes contra el anterior. `null` si la etiqueta no coincide con

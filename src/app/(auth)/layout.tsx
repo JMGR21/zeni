@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ScouterHud } from "@/components/scouter-hud";
 
 // Ki Despertando (ámbar) como acento fijo: aún no hay un usuario con Ki
@@ -12,6 +13,13 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         <div className="relative flex flex-col items-center gap-3 px-6 text-center">
           <div className="flex items-center gap-3">
             <span aria-hidden="true" className="h-px w-6 bg-ki-awakening/60 md:w-10" />
+            <Image
+              src="/brand/zeni-icon.png"
+              alt=""
+              width={40}
+              height={40}
+              className="size-8 md:size-10"
+            />
             <span className="font-display text-4xl font-bold tracking-[0.3em] text-ink md:text-6xl">
               ZENI
             </span>

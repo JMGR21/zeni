@@ -1,5 +1,4 @@
 import { GiWeightLiftingUp } from "react-icons/gi";
-import { AppHeader } from "@/components/app-header";
 import { BudgetCategoryCard } from "@/components/budget-category-card";
 import { BudgetSummary } from "@/components/budget-summary";
 import { getSuggestedBudget, type BudgetCategory } from "@/lib/budget";
@@ -25,6 +24,7 @@ export default async function BudgetPage() {
       .from("categories")
       .select("id, name")
       .eq("type", "expense")
+      .eq("active", true)
       .order("name")
       .returns<{ id: string; name: string }[]>(),
     supabase.from("budgets").select("category_id, amount").returns<{ category_id: string; amount: number }[]>(),
@@ -58,39 +58,35 @@ export default async function BudgetPage() {
   );
 
   return (
-    <div className="flex min-h-dvh flex-col bg-void text-ink">
-      <AppHeader active="budget" />
+    <section className="mx-auto w-full max-w-4xl px-6 py-10">
+      <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
+        <GiWeightLiftingUp className="size-3.5 text-ki-awakening" aria-hidden="true" />
+        Cámara de gravedad
+      </div>
+      <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Presupuesto</h1>
+      <p className="mt-1 text-sm text-ink-muted">
+        Cada categoría entrena bajo su propio límite de gravedad, calculado a partir de tu gasto real de los
+        últimos 3 meses. Personaliza el límite cuando quieras.
+      </p>
 
-      <section className="mx-auto w-full max-w-4xl px-6 py-10">
-        <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
-          <GiWeightLiftingUp className="size-3.5 text-ki-awakening" aria-hidden="true" />
-          Cámara de gravedad
-        </div>
-        <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Presupuesto</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Cada categoría entrena bajo su propio límite de gravedad, calculado a partir de tu gasto real de los
-          últimos 3 meses. Personaliza el límite cuando quieras.
-        </p>
+      <div className="mt-8">
+        <BudgetSummary categories={budgetCategories} />
+      </div>
 
-        <div className="mt-8">
-          <BudgetSummary categories={budgetCategories} />
-        </div>
-
-        <div className="mt-8">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
-            Categorías de gasto
-          </h2>
-          {budgetCategories.length > 0 ? (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {budgetCategories.map((category) => (
-                <BudgetCategoryCard key={category.id} category={category} />
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-ink-muted">Aún no tienes categorías de gasto.</p>
-          )}
-        </div>
-      </section>
-    </div>
+      <div className="mt-8">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+          Categorías de gasto
+        </h2>
+        {budgetCategories.length > 0 ? (
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {budgetCategories.map((category) => (
+              <BudgetCategoryCard key={category.id} category={category} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-ink-muted">Aún no tienes categorías de gasto.</p>
+        )}
+      </div>
+    </section>
   );
 }
