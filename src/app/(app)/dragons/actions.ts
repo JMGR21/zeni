@@ -6,6 +6,7 @@ import { getInstitution } from "@/lib/institutions";
 import { toISODateString } from "@/lib/weekly-xp";
 import { grantAchievement } from "@/lib/grant-achievement";
 import { projectDebt } from "@/lib/debt-projection";
+import { computeFixedWeeklyTotals } from "@/lib/fixed-weekly-debt";
 import { insertTransaction } from "@/lib/create-transaction";
 import type { AchievementDefinition } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
@@ -15,6 +16,7 @@ export type ContributeActionState = { error?: string; success?: boolean; achieve
 export type FinancingActionState = { error?: string; success?: boolean; achievements?: AchievementDefinition[] };
 export type UpdateDragonActionState = { error?: string; success?: boolean };
 export type DeleteDragonActionState = { error?: string; success?: boolean };
+export type PayoffTodayActionState = { error?: string; success?: boolean };
 
 function getField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -192,6 +194,80 @@ export async function updateDebtFinancing(
   const dragonId = getField(formData, "dragon_id");
   if (!dragonId) return { error: "Dragón inválido." };
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const scheduleMode = getField(formData, "schedule_mode");
+
+  // Plazo fijo semanal: el banco ya da el costo total y no hay tasa que
+  // proyectar, así que esta modalidad no pasa por projectDebt/"Deuda
+  // Rescatada" — target_amount/current_amount se recalculan directo aquí.
+  if (scheduleMode === "fixed_weekly") {
+    const principalAmount = Number(getField(formData, "principal_amount"));
+    if (!Number.isFinite(principalAmount) || principalAmount <= 0) {
+      return { error: "Ingresa el monto de disposición." };
+    }
+    const weeklyPayment = Number(getField(formData, "weekly_payment"));
+    if (!Number.isFinite(weeklyPayment) || weeklyPayment <= 0) {
+      return { error: "Ingresa el pago fijo semanal." };
+    }
+    const totalInstallments = Number(getField(formData, "total_installments"));
+    if (!Number.isInteger(totalInstallments) || totalInstallments <= 0) {
+      return { error: "Ingresa el plazo total en semanas." };
+    }
+    const installmentsPaidRaw = getField(formData, "installments_paid");
+    const installmentsPaid = installmentsPaidRaw ? Number(installmentsPaidRaw) : 0;
+    if (!Number.isInteger(installmentsPaid) || installmentsPaid < 0 || installmentsPaid > totalInstallments) {
+      return { error: "Ingresa cuántas semanas ya pagaste." };
+    }
+    const dayOfWeekRaw = getField(formData, "payment_day_of_week");
+    const paymentDayOfWeek = dayOfWeekRaw ? Number(dayOfWeekRaw) : null;
+    if (paymentDayOfWeek !== null && (!Number.isInteger(paymentDayOfWeek) || paymentDayOfWeek < 0 || paymentDayOfWeek > 6)) {
+      return { error: "Selecciona un día de pago válido." };
+    }
+    const disbursementDate = getField(formData, "disbursement_date") || null;
+    if (!disbursementDate) return { error: "Ingresa la fecha de disposición." };
+
+    const payoffTodayRaw = getField(formData, "payoff_today_amount");
+    const payoffTodayAmount = payoffTodayRaw ? Number(payoffTodayRaw) : null;
+    if (payoffTodayAmount !== null && (!Number.isFinite(payoffTodayAmount) || payoffTodayAmount < 0)) {
+      return { error: "Ingresa un saldo de liquidación válido." };
+    }
+
+    const totals = computeFixedWeeklyTotals({ principalAmount, weeklyPayment, totalInstallments, installmentsPaid });
+
+    const { error: updateError } = await supabase
+      .from("dragons")
+      .update({
+        institution: null,
+        payment_schedule: "fixed_weekly",
+        interest_rate: null,
+        minimum_payment: null,
+        extra_payment: 0,
+        principal_amount: principalAmount,
+        weekly_payment: weeklyPayment,
+        total_installments: totalInstallments,
+        payment_day_of_week: paymentDayOfWeek,
+        disbursement_date: disbursementDate,
+        payoff_today_amount: payoffTodayAmount,
+        payoff_today_updated_at: payoffTodayAmount !== null ? new Date().toISOString() : null,
+        target_amount: totals.targetAmount,
+        current_amount: totals.currentAmount,
+        status: totals.currentAmount >= totals.targetAmount ? "completed" : "active",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", dragonId)
+      .eq("user_id", user.id)
+      .eq("type", "debt");
+    if (updateError) return { error: updateError.message };
+
+    revalidatePath("/dragons");
+    return { success: true, achievements: [] };
+  }
+
   const extraPaymentRaw = getField(formData, "extra_payment");
   const extraPayment = extraPaymentRaw ? Number(extraPaymentRaw) : 0;
   if (!Number.isFinite(extraPayment) || extraPayment < 0) {
@@ -229,15 +305,9 @@ export async function updateDebtFinancing(
     }
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
-
   const { data: previousDragon } = await supabase
     .from("dragons")
-    .select("current_amount, target_amount, interest_rate, minimum_payment, extra_payment")
+    .select("current_amount, target_amount, interest_rate, minimum_payment, extra_payment, payment_schedule")
     .eq("id", dragonId)
     .eq("user_id", user.id)
     .eq("type", "debt")
@@ -247,15 +317,24 @@ export async function updateDebtFinancing(
       interest_rate: number | null;
       minimum_payment: number | null;
       extra_payment: number;
+      payment_schedule: string | null;
     }>();
 
   const { error: updateError } = await supabase
     .from("dragons")
     .update({
       institution: institution?.id ?? null,
+      payment_schedule: institution?.kind === "fixed_plan" ? "fixed_plan" : "amortized",
       interest_rate: interestRate,
       minimum_payment: minimumPayment,
       extra_payment: extraPayment,
+      principal_amount: null,
+      weekly_payment: null,
+      total_installments: null,
+      payment_day_of_week: null,
+      disbursement_date: null,
+      payoff_today_amount: null,
+      payoff_today_updated_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", dragonId)
@@ -264,7 +343,7 @@ export async function updateDebtFinancing(
   if (updateError) return { error: updateError.message };
 
   const achievements: AchievementDefinition[] = [];
-  if (previousDragon) {
+  if (previousDragon && previousDragon.payment_schedule !== "fixed_weekly") {
     const pendingBalance = previousDragon.target_amount - previousDragon.current_amount;
     const previousProjection = projectDebt({
       pendingBalance,
@@ -286,6 +365,40 @@ export async function updateDebtFinancing(
 
   revalidatePath("/dragons");
   return { success: true, achievements };
+}
+
+export async function updatePayoffToday(
+  _previousState: PayoffTodayActionState,
+  formData: FormData,
+): Promise<PayoffTodayActionState> {
+  const dragonId = getField(formData, "dragon_id");
+  if (!dragonId) return { error: "Dragón inválido." };
+
+  const amount = Number(getField(formData, "amount"));
+  if (!Number.isFinite(amount) || amount < 0) {
+    return { error: "Ingresa un saldo válido." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase
+    .from("dragons")
+    .update({
+      payoff_today_amount: amount,
+      payoff_today_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dragonId)
+    .eq("user_id", user.id)
+    .eq("type", "debt");
+  if (error) return { error: error.message };
+
+  revalidatePath("/dragons");
+  return { success: true };
 }
 
 /**

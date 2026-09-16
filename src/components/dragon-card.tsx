@@ -7,9 +7,11 @@ import { DebtFinancingDialog } from "@/components/debt-financing-dialog";
 import { DeleteDragonDialog } from "@/components/delete-dragon-dialog";
 import { DragonMotif } from "@/components/dragon-motif";
 import { SphereOrb } from "@/components/sphere-orb";
+import { UpdatePayoffTodayDialog } from "@/components/update-payoff-today-dialog";
 import { DRAGON_ACCENT_STYLES, getDragonAccent } from "@/lib/dragon-accent";
 import { projectDebt } from "@/lib/debt-projection";
 import type { AttackOrderInfo } from "@/lib/dragon-priority";
+import { computePayoffTodaySavings, deriveInstallmentsPaid, WEEKDAY_LABELS } from "@/lib/fixed-weekly-debt";
 import { getInstitution } from "@/lib/institutions";
 import { formatRelativeDays } from "@/lib/relative-time";
 import { getSphereProgress } from "@/lib/spheres";
@@ -26,6 +28,14 @@ export type Dragon = {
   minimum_payment: number | null;
   extra_payment: number;
   priority: number | null;
+  payment_schedule: "amortized" | "fixed_plan" | "fixed_weekly" | null;
+  principal_amount: number | null;
+  weekly_payment: number | null;
+  total_installments: number | null;
+  payment_day_of_week: number | null;
+  disbursement_date: string | null;
+  payoff_today_amount: number | null;
+  payoff_today_updated_at: string | null;
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -62,6 +72,63 @@ function DebtProjectionSummary({ dragon }: { dragon: Dragon }) {
       Te faltan <span className="text-ink">{projection.months}</span> meses · Intereses proyectados{" "}
       <span className="text-ink">{currencyFormatter.format(projection.totalInterest)}</span>
     </p>
+  );
+}
+
+function FixedWeeklyDebtSummary({ dragon }: { dragon: Dragon }) {
+  if (!dragon.weekly_payment || !dragon.total_installments) {
+    return <p className="mt-2 text-xs text-ink-muted">Define el plazo fijo semanal en Detalles de financiamiento.</p>;
+  }
+
+  const installmentsPaid = deriveInstallmentsPaid(dragon.current_amount, dragon.weekly_payment);
+  const installmentsRemaining = dragon.total_installments - installmentsPaid;
+  const totalInterest = dragon.target_amount - (dragon.principal_amount ?? 0);
+  const savings =
+    dragon.payoff_today_amount !== null
+      ? computePayoffTodaySavings({
+          weeklyPayment: dragon.weekly_payment,
+          installmentsRemaining,
+          payoffTodayAmount: dragon.payoff_today_amount,
+        })
+      : null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+        <span className="text-ink">{installmentsPaid}</span> de {dragon.total_installments} pagos semanales
+        {dragon.payment_day_of_week !== null && <> · Próximo pago: {WEEKDAY_LABELS[dragon.payment_day_of_week]}</>}
+      </p>
+      <p className="text-xs text-ink-muted">Intereses totales {currencyFormatter.format(totalInterest)}</p>
+
+      <div className="rounded-lg border border-ink-muted/10 bg-void/40 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Si liquidas hoy</p>
+          <UpdatePayoffTodayDialog
+            dragonId={dragon.id}
+            dragonName={dragon.name}
+            currentPayoffAmount={dragon.payoff_today_amount}
+          />
+        </div>
+        {dragon.payoff_today_amount !== null ? (
+          <>
+            <p className="mt-1.5 text-sm text-ink">{currencyFormatter.format(dragon.payoff_today_amount)}</p>
+            {dragon.payoff_today_updated_at && (
+              <p className="text-xs text-ink-muted">Actualizado {formatRelativeDays(dragon.payoff_today_updated_at)}</p>
+            )}
+            {savings !== null && savings > 0 && (
+              <p className="mt-1.5 text-sm font-medium text-ki-awakening">
+                Ahorras {currencyFormatter.format(savings)} en intereses si liquidas hoy
+              </p>
+            )}
+            {savings !== null && savings <= 0 && (
+              <p className="mt-1.5 text-xs text-ink-muted">Seguir pagando como está pactado sale igual o más barato.</p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1.5 text-xs text-ink-muted">Sin saldo capturado todavía.</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -126,7 +193,12 @@ export function DragonCard({
         {dragon.type === "debt" && !completed && (
           <p className="mt-1.5 text-xs text-ink-muted">Saldo pendiente {currencyFormatter.format(remaining)}</p>
         )}
-        {dragon.type === "debt" && !completed && <DebtProjectionSummary dragon={dragon} />}
+        {dragon.type === "debt" && !completed && dragon.payment_schedule === "fixed_weekly" && (
+          <FixedWeeklyDebtSummary dragon={dragon} />
+        )}
+        {dragon.type === "debt" && !completed && dragon.payment_schedule !== "fixed_weekly" && (
+          <DebtProjectionSummary dragon={dragon} />
+        )}
         {dragon.type === "debt" && !completed && attackOrder && (
           <AttackOrderControls dragonId={dragon.id} order={attackOrder} />
         )}
@@ -146,10 +218,18 @@ export function DragonCard({
               dragonId={dragon.id}
               dragonName={dragon.name}
               pendingBalance={remaining}
+              currentAmount={dragon.current_amount}
               institution={dragon.institution}
               interestRate={dragon.interest_rate}
               minimumPayment={dragon.minimum_payment}
               extraPayment={dragon.extra_payment}
+              paymentSchedule={dragon.payment_schedule}
+              principalAmount={dragon.principal_amount}
+              weeklyPayment={dragon.weekly_payment}
+              totalInstallments={dragon.total_installments}
+              paymentDayOfWeek={dragon.payment_day_of_week}
+              disbursementDate={dragon.disbursement_date}
+              payoffTodayAmount={dragon.payoff_today_amount}
             />
           )}
         </div>

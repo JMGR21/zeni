@@ -16,6 +16,7 @@ function monthsLabel(months: number) {
 
 function buildPayoffInputs(dragons: Dragon[]): DebtPayoffInput[] {
   return dragons
+    .filter((dragon) => dragon.payment_schedule !== "fixed_weekly")
     .filter((dragon) => (dragon.minimum_payment ?? 0) + dragon.extra_payment > 0)
     .map((dragon) => ({
       id: dragon.id,
@@ -115,6 +116,14 @@ function ComparisonHighlight({
 export function DebtStrategyComparison({ dragons }: { dragons: Dragon[] }) {
   if (dragons.length < 2) return null;
 
+  const fixedWeeklyCount = dragons.filter((dragon) => dragon.payment_schedule === "fixed_weekly").length;
+  const fixedWeeklyNote = fixedWeeklyCount > 0 && (
+    <p className="mt-1 text-xs text-ink-muted">
+      {fixedWeeklyCount === 1 ? "1 deuda de plazo fijo semanal no se incluye" : `${fixedWeeklyCount} deudas de plazo fijo semanal no se incluyen`}{" "}
+      en este comparador — no tienen una tasa mensual con la que compararse.
+    </p>
+  );
+
   const inputs = buildPayoffInputs(dragons);
   if (inputs.length < 2) {
     return (
@@ -126,6 +135,7 @@ export function DebtStrategyComparison({ dragons }: { dragons: Dragon[] }) {
         <p className="mt-4 text-sm text-ink-muted">
           Define tasa/pago mínimo o pago extra en al menos 2 deudas para comparar avalancha vs. bola de nieve.
         </p>
+        {fixedWeeklyNote}
       </div>
     );
   }
@@ -142,6 +152,7 @@ export function DebtStrategyComparison({ dragons }: { dragons: Dragon[] }) {
       <p className="mt-1 text-xs text-ink-muted">
         Informativo — no cambia tu orden de ataque. Ese lo sigues controlando tú con las flechas de arriba.
       </p>
+      {fixedWeeklyNote}
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <StrategyCard
