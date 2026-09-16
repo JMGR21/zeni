@@ -56,3 +56,51 @@ export async function toggleCategoryActive(id: string, active: boolean) {
   revalidatePath("/dashboard");
   revalidatePath("/budget");
 }
+
+export type UpdateCategoryActionState = { error?: string; success?: boolean };
+
+export async function updateCategory(
+  _previousState: UpdateCategoryActionState,
+  formData: FormData,
+): Promise<UpdateCategoryActionState> {
+  const id = getField(formData, "id");
+  const name = getField(formData, "name");
+  if (!name) return { error: "Ingresa un nombre." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase.from("categories").update({ name }).eq("id", id).eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/categories");
+  revalidatePath("/dashboard");
+  revalidatePath("/budget");
+  return { success: true };
+}
+
+export type DeleteCategoryActionState = { error?: string; success?: boolean };
+
+export async function deleteCategory(
+  _previousState: DeleteCategoryActionState,
+  formData: FormData,
+): Promise<DeleteCategoryActionState> {
+  const id = getField(formData, "id");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase.from("categories").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/categories");
+  revalidatePath("/dashboard");
+  revalidatePath("/budget");
+  return { success: true };
+}

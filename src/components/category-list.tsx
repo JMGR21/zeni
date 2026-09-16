@@ -3,6 +3,8 @@
 import { useTransition } from "react";
 import { cn } from "cn";
 import { toggleCategoryActive } from "@/app/(app)/categories/actions";
+import { DeleteCategoryDialog } from "@/components/delete-category-dialog";
+import { EditCategoryDialog } from "@/components/edit-category-dialog";
 import { Switch } from "@/components/ui/switch";
 
 export type CategoryRow = {
@@ -18,12 +20,16 @@ function CategoryRowItem({ category }: { category: CategoryRow }) {
   return (
     <div className="flex items-center justify-between border-b border-ink-muted/10 py-3 last:border-b-0">
       <span className={cn("text-sm text-ink", !category.active && "text-ink-muted")}>{category.name}</span>
-      <Switch
-        checked={category.active}
-        disabled={isPending}
-        aria-label={`${category.active ? "Desactivar" : "Activar"} categoría ${category.name}`}
-        onCheckedChange={(checked) => startTransition(() => toggleCategoryActive(category.id, checked))}
-      />
+      <div className="flex items-center gap-1">
+        <EditCategoryDialog categoryId={category.id} categoryName={category.name} />
+        <DeleteCategoryDialog categoryId={category.id} categoryName={category.name} />
+        <Switch
+          checked={category.active}
+          disabled={isPending}
+          aria-label={`${category.active ? "Desactivar" : "Activar"} categoría ${category.name}`}
+          onCheckedChange={(checked) => startTransition(() => toggleCategoryActive(category.id, checked))}
+        />
+      </div>
     </div>
   );
 }
