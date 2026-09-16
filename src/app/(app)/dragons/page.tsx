@@ -5,12 +5,22 @@ import { DragonCard, type Dragon } from "@/components/dragon-card";
 import { DragonsEmptyState } from "@/components/dragons-empty-state";
 import { DragonsProgressChart } from "@/components/dragons-progress-chart";
 import { DragonsSummary } from "@/components/dragons-summary";
+import { DragonsTabs, type DragonsTab } from "@/components/dragons-tabs";
 import { assignMissingPriorities, getAttackOrder } from "@/lib/dragon-priority";
 import { createClient } from "@/lib/supabase/server";
 
 type DragonRow = Dragon & { created_at: string };
 
-export default async function DragonsPage() {
+type SearchParams = { [key: string]: string | string[] | undefined };
+
+function parseTab(value: string | string[] | undefined): DragonsTab {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "savings" || raw === "debt" ? raw : "general";
+}
+
+export default async function DragonsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  const tab = parseTab(params.tab);
   const supabase = await createClient();
   const {
     data: { user },
@@ -66,6 +76,11 @@ export default async function DragonsPage() {
   const activeDragons = [...activeDebts, ...activeSavings];
   const completedDragons = (dragons ?? []).filter((dragon) => dragon.status === "completed");
 
+  const hasAnyDragons = (dragons ?? []).length > 0;
+  const activeList = tab === "savings" ? activeSavings : tab === "debt" ? activeDebts : activeDragons;
+  const completedList =
+    tab === "general" ? completedDragons : completedDragons.filter((dragon) => dragon.type === tab);
+
   return (
     <>
       <section className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -79,14 +94,20 @@ export default async function DragonsPage() {
         </p>
 
         <div className="mt-8">
-          <DragonsSummary dragons={dragons ?? []} />
+          <DragonsTabs active={tab} />
         </div>
+
+        {tab === "general" && (
+          <div className="mt-8">
+            <DragonsSummary dragons={dragons ?? []} />
+          </div>
+        )}
 
         <div className="mt-8">
           <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">Activos</h2>
-          {activeDragons.length > 0 ? (
+          {activeList.length > 0 ? (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {activeDragons.map((dragon) => (
+              {activeList.map((dragon) => (
                 <DragonCard
                   key={dragon.id}
                   dragon={dragon}
@@ -95,6 +116,10 @@ export default async function DragonsPage() {
                 />
               ))}
             </div>
+          ) : hasAnyDragons ? (
+            <p className="mt-4 text-sm text-ink-muted">
+              {tab === "savings" ? "No tienes Dragones de ahorro activos." : "No tienes Dragones de deuda activos."}
+            </p>
           ) : (
             <div className="mt-4">
               <DragonsEmptyState />
@@ -102,21 +127,21 @@ export default async function DragonsPage() {
           )}
         </div>
 
-        {activeDragons.length >= 2 && (
+        {activeList.length >= 2 && (
           <div className="mt-8">
-            <DragonsProgressChart dragons={activeDragons} />
+            <DragonsProgressChart dragons={activeList} />
           </div>
         )}
 
-        <DebtStrategyComparison dragons={activeDebts} />
+        {tab !== "savings" && <DebtStrategyComparison dragons={activeDebts} />}
 
-        {completedDragons.length > 0 && (
+        {completedList.length > 0 && (
           <div className="mt-8">
             <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
               Completados
             </h2>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {completedDragons.map((dragon) => (
+              {completedList.map((dragon) => (
                 <DragonCard
                   key={dragon.id}
                   dragon={dragon}
