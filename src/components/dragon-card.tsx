@@ -31,7 +31,7 @@ export type Dragon = {
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 function DebtProjectionSummary({ dragon }: { dragon: Dragon }) {

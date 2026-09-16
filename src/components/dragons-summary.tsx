@@ -4,7 +4,7 @@ import { projectDebt } from "@/lib/debt-projection";
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 export function DragonsSummary({

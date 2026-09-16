@@ -26,7 +26,7 @@ const STEP_LABELS = ["Origen", "Detalles", "Extra", "Confirmar"] as const;
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 function originLabel(originId: string) {
