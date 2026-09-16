@@ -10,6 +10,7 @@ export type InsertTransactionParams = {
   description: string | null;
   occurredOn: string;
   dragonId: string | null;
+  reservedForNextPeriod?: boolean;
 };
 
 export type InsertTransactionResult =
@@ -30,7 +31,7 @@ export async function insertTransaction(
   supabase: SupabaseClient,
   params: InsertTransactionParams,
 ): Promise<InsertTransactionResult> {
-  const { userId, type, amount, categoryId, description, occurredOn, dragonId } = params;
+  const { userId, type, amount, categoryId, description, occurredOn, dragonId, reservedForNextPeriod = false } = params;
 
   const { data: inserted, error } = await supabase
     .from("transactions")
@@ -42,6 +43,7 @@ export async function insertTransaction(
       description,
       occurred_on: occurredOn,
       dragon_id: dragonId,
+      reserved_for_next_period: type === "income" ? reservedForNextPeriod : false,
     })
     .select("id")
     .single<{ id: string }>();

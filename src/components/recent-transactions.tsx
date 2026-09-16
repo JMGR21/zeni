@@ -14,6 +14,7 @@ export type RecentTransaction = {
   categories: { name: string } | null;
   dragon_id: string | null;
   dragons: { name: string } | null;
+  reserved_for_next_period: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
@@ -36,6 +37,7 @@ function editableTransaction(transaction: RecentTransaction) {
     description: transaction.description,
     occurred_on: transaction.occurred_on,
     dragon_id: transaction.dragon_id,
+    reserved_for_next_period: transaction.reserved_for_next_period,
   };
 }
 

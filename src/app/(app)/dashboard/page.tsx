@@ -25,6 +25,7 @@ import type { KiScorePoint } from "@/components/ki-evolution-chart";
 import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
 import { getMonthlyIncomeExpenseSeries, type MonthlyFlow } from "@/lib/monthly-summary";
+import { computeIncomingBuffer, computeNetBalance } from "@/lib/monthly-balance";
 import { getTotalBalance } from "@/lib/total-balance";
 import { computePeriodStart, periodRangeFromStart, parsePeriodISODate, shiftPeriodStart, toISODate } from "@/lib/period";
 import { evaluateGeneralAchievements } from "@/lib/achievement-engine";
@@ -120,12 +121,14 @@ export default async function DashboardPage({
       .lt("occurred_on", end),
     supabase
       .from("transactions")
-      .select("type, amount")
+      .select("type, amount, reserved_for_next_period")
       .gte("occurred_on", prevStart)
       .lt("occurred_on", prevEnd),
     supabase
       .from("transactions")
-      .select("id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)")
+      .select(
+        "id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name), reserved_for_next_period",
+      )
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(10)
@@ -230,6 +233,12 @@ export default async function DashboardPage({
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const prevBalance = prevIncome - prevExpenses;
 
+  const prevReservedIncome = (previousMonthTransactions ?? [])
+    .filter((transaction) => transaction.type === "income" && transaction.reserved_for_next_period)
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const incomingBuffer = computeIncomingBuffer({ income: prevIncome, expense: prevExpenses, reservedIncome: prevReservedIncome });
+  const netBalance = computeNetBalance(balance, incomingBuffer);
+
   const balanceDelta = buildDelta(balance, prevBalance, "higherIsBetter");
   const incomeDelta = buildDelta(income, prevIncome, "higherIsBetter");
   const expensesDelta = buildDelta(expenses, prevExpenses, "lowerIsBetter");
@@ -287,6 +296,20 @@ export default async function DashboardPage({
           value={currencyFormatter.format(balance)}
           delta={balanceDelta}
           deltaLabel="vs. periodo anterior"
+          infoTooltip={
+            incomingBuffer !== 0
+              ? "Un ingreso marcado como colchón se cuenta en el periodo en que ocurrió, pero si sobra, ayuda a cubrir un balance negativo del periodo siguiente. No se acumula más de un periodo."
+              : undefined
+          }
+          bufferBreakdown={
+            incomingBuffer !== 0
+              ? {
+                  rawBalance: currencyFormatter.format(balance),
+                  incomingBuffer: `${incomingBuffer > 0 ? "+" : ""}${currencyFormatter.format(incomingBuffer)}`,
+                  netBalance: currencyFormatter.format(netBalance),
+                }
+              : undefined
+          }
         />
         <StatTile
           icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
