@@ -136,7 +136,7 @@ export default async function DashboardPage({
     supabase
       .from("dragons")
       .select(
-        "id, name, type, target_amount, current_amount, status, institution, interest_rate, minimum_payment, extra_payment, priority",
+        "id, name, type, target_amount, current_amount, status, institution, interest_rate, minimum_payment, extra_payment, priority, payment_schedule, principal_amount, weekly_payment, total_installments, payment_day_of_week, disbursement_date, payoff_today_amount, payoff_today_updated_at",
       )
       .eq("status", "active")
       .order("name")

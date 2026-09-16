@@ -26,6 +26,18 @@ export function DragonsSummary({
   let totalProjectedInterest = 0;
   let excludedDebts = 0;
   for (const dragon of activeDebts) {
+    // Plazo fijo semanal no usa debt-projection.ts (no hay tasa que
+    // proyectar) — el banco ya da el costo total, así que su interés es
+    // fijo: target_amount (costo total) menos el monto de disposición.
+    if (dragon.payment_schedule === "fixed_weekly") {
+      if (dragon.principal_amount !== null) {
+        totalProjectedInterest += dragon.target_amount - dragon.principal_amount;
+      } else {
+        excludedDebts += 1;
+      }
+      continue;
+    }
+
     const projection = projectDebt({
       pendingBalance: dragon.target_amount - dragon.current_amount,
       annualRate: dragon.interest_rate,

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
 import { projectDebt } from "@/lib/debt-projection";
+import { computeFixedWeeklyTotals, deriveInstallmentsPaid, WEEKDAY_LABELS } from "@/lib/fixed-weekly-debt";
 import { getInstitution, getReferenceRate, INSTITUTIONS } from "@/lib/institutions";
 import { useAchievementToasts } from "@/hooks/use-achievement-toasts";
 
@@ -20,8 +21,10 @@ const initialState: FinancingActionState = {};
 
 const CUSTOM_NO_INTEREST = "custom_none";
 const CUSTOM_WITH_INTEREST = "custom_rate";
+const FIXED_WEEKLY_ORIGIN = "fixed_weekly";
 
 const STEP_LABELS = ["Origen", "Detalles", "Extra", "Confirmar"] as const;
+const FIXED_WEEKLY_STEP_LABELS = ["Origen", "Montos", "Plazo", "Calendario", "Saldo hoy", "Confirmar"] as const;
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -30,12 +33,14 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 });
 
 function originLabel(originId: string) {
+  if (originId === FIXED_WEEKLY_ORIGIN) return "Plazo fijo semanal";
   const institution = getInstitution(originId);
   if (institution) return institution.name;
   return originId === CUSTOM_NO_INTEREST ? "Personalizada sin interés" : "Personalizada con interés";
 }
 
-function initialOrigin(institution: string | null, interestRate: number | null) {
+function initialOrigin(paymentSchedule: string | null, institution: string | null, interestRate: number | null) {
+  if (paymentSchedule === "fixed_weekly") return FIXED_WEEKLY_ORIGIN;
   if (institution) return institution;
   return interestRate !== null ? CUSTOM_WITH_INTEREST : CUSTOM_NO_INTEREST;
 }
@@ -171,6 +176,10 @@ function OriginStep({ value, onSelect }: { value: string; onSelect: (origin: str
                 {item.name}
               </SelectItem>
             ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Plazo fijo</SelectLabel>
+            <SelectItem value={FIXED_WEEKLY_ORIGIN}>Plazo fijo semanal (ej. Banco Azteca)</SelectItem>
           </SelectGroup>
           <SelectGroup>
             <SelectLabel>Personalizada</SelectLabel>
@@ -309,6 +318,305 @@ function DetailsStep({
   );
 }
 
+function FixedWeeklyAmountsStep({
+  principalAmount,
+  onPrincipalAmountChange,
+  weeklyPayment,
+  onWeeklyPaymentChange,
+  onNext,
+}: {
+  principalAmount: string;
+  onPrincipalAmountChange: (next: string) => void;
+  weeklyPayment: string;
+  onWeeklyPaymentChange: (next: string) => void;
+  onNext: () => void;
+}) {
+  const canContinue = Number(principalAmount) > 0 && Number(weeklyPayment) > 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label htmlFor="financing-principal" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+          Monto de disposición
+        </label>
+        <Input
+          id="financing-principal"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0.01"
+          autoFocus
+          value={principalAmount}
+          onChange={(event) => onPrincipalAmountChange(event.target.value)}
+          className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor="financing-weekly-payment" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+          Pago fijo semanal
+        </label>
+        <Input
+          id="financing-weekly-payment"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0.01"
+          value={weeklyPayment}
+          onChange={(event) => onWeeklyPaymentChange(event.target.value)}
+          className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
+        />
+      </div>
+
+      <Button
+        type="button"
+        disabled={!canContinue}
+        onClick={onNext}
+        className="h-11 w-full bg-ki-awakening text-void hover:bg-ki-awakening/90 disabled:opacity-30"
+      >
+        Siguiente
+      </Button>
+    </div>
+  );
+}
+
+function FixedWeeklyTermStep({
+  totalInstallments,
+  onTotalInstallmentsChange,
+  installmentsPaid,
+  onInstallmentsPaidChange,
+  onNext,
+}: {
+  totalInstallments: string;
+  onTotalInstallmentsChange: (next: string) => void;
+  installmentsPaid: string;
+  onInstallmentsPaidChange: (next: string) => void;
+  onNext: () => void;
+}) {
+  const canContinue =
+    Number(totalInstallments) > 0 &&
+    Number(installmentsPaid || "0") >= 0 &&
+    Number(installmentsPaid || "0") <= Number(totalInstallments);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label
+            htmlFor="financing-total-installments"
+            className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+          >
+            Plazo (semanas)
+          </label>
+          <Input
+            id="financing-total-installments"
+            type="number"
+            inputMode="numeric"
+            step="1"
+            min="1"
+            autoFocus
+            value={totalInstallments}
+            onChange={(event) => onTotalInstallmentsChange(event.target.value)}
+            className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="financing-installments-paid"
+            className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+          >
+            Semanas ya pagadas
+          </label>
+          <Input
+            id="financing-installments-paid"
+            type="number"
+            inputMode="numeric"
+            step="1"
+            min="0"
+            value={installmentsPaid}
+            onChange={(event) => onInstallmentsPaidChange(event.target.value)}
+            className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
+          />
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        disabled={!canContinue}
+        onClick={onNext}
+        className="h-11 w-full bg-ki-awakening text-void hover:bg-ki-awakening/90 disabled:opacity-30"
+      >
+        Siguiente
+      </Button>
+    </div>
+  );
+}
+
+function FixedWeeklyScheduleStep({
+  paymentDayOfWeek,
+  onPaymentDayOfWeekChange,
+  disbursementDate,
+  onDisbursementDateChange,
+  onNext,
+}: {
+  paymentDayOfWeek: number;
+  onPaymentDayOfWeekChange: (next: number) => void;
+  disbursementDate: string;
+  onDisbursementDateChange: (next: string) => void;
+  onNext: () => void;
+}) {
+  const canContinue = disbursementDate !== "";
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Día de pago</label>
+        <Select value={String(paymentDayOfWeek)} onValueChange={(next) => onPaymentDayOfWeekChange(Number(next))}>
+          <SelectTrigger aria-label="Día de pago" className="h-11 w-full">
+            <SelectValue>{(value: string) => WEEKDAY_LABELS[Number(value)]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {WEEKDAY_LABELS.map((label, index) => (
+              <SelectItem key={label} value={String(index)}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <label
+          htmlFor="financing-disbursement-date"
+          className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+        >
+          Fecha de disposición
+        </label>
+        <Input
+          id="financing-disbursement-date"
+          type="date"
+          value={disbursementDate}
+          onChange={(event) => onDisbursementDateChange(event.target.value)}
+          className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink"
+        />
+      </div>
+
+      <Button
+        type="button"
+        disabled={!canContinue}
+        onClick={onNext}
+        className="h-11 w-full bg-ki-awakening text-void hover:bg-ki-awakening/90 disabled:opacity-30"
+      >
+        Siguiente
+      </Button>
+    </div>
+  );
+}
+
+function FixedWeeklyPayoffTodayStep({
+  payoffTodayAmount,
+  onPayoffTodayAmountChange,
+  onNext,
+}: {
+  payoffTodayAmount: string;
+  onPayoffTodayAmountChange: (next: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label
+          htmlFor="financing-payoff-today"
+          className="font-mono text-[11px] tracking-widest text-ink-muted uppercase"
+        >
+          Saldo de liquidación hoy (opcional)
+        </label>
+        <Input
+          id="financing-payoff-today"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          autoFocus
+          value={payoffTodayAmount}
+          onChange={(event) => onPayoffTodayAmountChange(event.target.value)}
+          placeholder="Se puede capturar después"
+          className="h-11 border-ink-muted/15 bg-void/40 text-sm text-ink placeholder:text-ink-muted/60"
+        />
+        <p className="text-xs text-ink-muted">El dato que consultas manualmente en tu banco. Puedes dejarlo vacío y capturarlo después.</p>
+      </div>
+
+      <Button type="button" onClick={onNext} className="h-11 w-full bg-ki-awakening text-void hover:bg-ki-awakening/90">
+        Siguiente
+      </Button>
+    </div>
+  );
+}
+
+function FixedWeeklyReviewStep({
+  principalAmount,
+  weeklyPayment,
+  totalInstallments,
+  installmentsPaid,
+  paymentDayOfWeek,
+  disbursementDate,
+  payoffTodayAmount,
+  error,
+  onEditStep,
+}: {
+  principalAmount: string;
+  weeklyPayment: string;
+  totalInstallments: string;
+  installmentsPaid: string;
+  paymentDayOfWeek: number;
+  disbursementDate: string;
+  payoffTodayAmount: string;
+  error?: string;
+  onEditStep: (step: number) => void;
+}) {
+  const totals = computeFixedWeeklyTotals({
+    principalAmount: Number(principalAmount || "0"),
+    weeklyPayment: Number(weeklyPayment || "0"),
+    totalInstallments: Number(totalInstallments || "0"),
+    installmentsPaid: Number(installmentsPaid || "0"),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2 rounded-lg border border-ink-muted/10 bg-void/40 p-3">
+        <WizardSummaryRow label="Origen" value="Plazo fijo semanal" onEdit={() => onEditStep(0)} />
+        <WizardSummaryRow
+          label="Disposición"
+          value={currencyFormatter.format(Number(principalAmount || "0"))}
+          onEdit={() => onEditStep(1)}
+        />
+        <WizardSummaryRow
+          label="Pago semanal"
+          value={currencyFormatter.format(Number(weeklyPayment || "0"))}
+          onEdit={() => onEditStep(1)}
+        />
+        <WizardSummaryRow
+          label="Progreso"
+          value={`${installmentsPaid || "0"} de ${totalInstallments || "0"} pagos`}
+          onEdit={() => onEditStep(2)}
+        />
+        <WizardSummaryRow label="Día de pago" value={WEEKDAY_LABELS[paymentDayOfWeek]} onEdit={() => onEditStep(3)} />
+        <WizardSummaryRow label="Disposición el" value={disbursementDate || "Sin definir"} onEdit={() => onEditStep(3)} />
+        <WizardSummaryRow
+          label="Saldo hoy"
+          value={payoffTodayAmount ? currencyFormatter.format(Number(payoffTodayAmount)) : "Sin definir"}
+          onEdit={() => onEditStep(4)}
+        />
+        <WizardSummaryRow label="Interés total" value={currencyFormatter.format(totals.totalInterest)} onEdit={() => onEditStep(1)} />
+      </div>
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      <SaveButton />
+    </div>
+  );
+}
+
 function ExtraPaymentStep({
   value,
   onChange,
@@ -394,6 +702,14 @@ function DebtFinancingWizard({
   interestRate,
   minimumPayment,
   extraPayment,
+  paymentSchedule,
+  currentAmount,
+  principalAmount: savedPrincipalAmount,
+  weeklyPayment: savedWeeklyPayment,
+  totalInstallments: savedTotalInstallments,
+  paymentDayOfWeek: savedPaymentDayOfWeek,
+  disbursementDate: savedDisbursementDate,
+  payoffTodayAmount: savedPayoffTodayAmount,
   onSuccess,
 }: {
   dragonId: string;
@@ -401,6 +717,14 @@ function DebtFinancingWizard({
   interestRate: number | null;
   minimumPayment: number | null;
   extraPayment: number;
+  paymentSchedule: string | null;
+  currentAmount: number;
+  principalAmount: number | null;
+  weeklyPayment: number | null;
+  totalInstallments: number | null;
+  paymentDayOfWeek: number | null;
+  disbursementDate: string | null;
+  payoffTodayAmount: number | null;
   onSuccess: () => void;
 }) {
   const [state, formAction] = useActionState(updateDebtFinancing, initialState);
@@ -408,12 +732,26 @@ function DebtFinancingWizard({
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
 
-  const [origin, setOrigin] = useState(() => initialOrigin(institution, interestRate));
+  const [origin, setOrigin] = useState(() => initialOrigin(paymentSchedule, institution, interestRate));
   const [rateValue, setRateValue] = useState<number | string>(() => interestRate ?? getReferenceRate(institution) ?? "");
   const [minimumPaymentValue, setMinimumPaymentValue] = useState<number | string>(minimumPayment ?? "");
   const [totalAmount, setTotalAmount] = useState("");
   const [termMonths, setTermMonths] = useState("");
   const [extraPaymentValue, setExtraPaymentValue] = useState(extraPayment ? String(extraPayment) : "");
+
+  const [principalAmount, setPrincipalAmount] = useState(savedPrincipalAmount ? String(savedPrincipalAmount) : "");
+  const [weeklyPayment, setWeeklyPayment] = useState(savedWeeklyPayment ? String(savedWeeklyPayment) : "");
+  const [totalInstallments, setTotalInstallments] = useState(
+    savedTotalInstallments ? String(savedTotalInstallments) : "",
+  );
+  const [installmentsPaid, setInstallmentsPaid] = useState(() =>
+    savedWeeklyPayment ? String(deriveInstallmentsPaid(currentAmount, savedWeeklyPayment)) : "",
+  );
+  const [paymentDayOfWeek, setPaymentDayOfWeek] = useState(savedPaymentDayOfWeek ?? 1);
+  const [disbursementDate, setDisbursementDate] = useState(savedDisbursementDate ?? "");
+  const [payoffTodayAmount, setPayoffTodayAmount] = useState(
+    savedPayoffTodayAmount !== null ? String(savedPayoffTodayAmount) : "",
+  );
 
   useEffect(() => {
     if (state.success) onSuccess();
@@ -427,6 +765,8 @@ function DebtFinancingWizard({
   const originInstitution = getInstitution(origin);
   const isFixedPlan = originInstitution?.kind === "fixed_plan";
   const isCustomNoInterest = origin === CUSTOM_NO_INTEREST;
+  const isFixedWeeklyOrigin = origin === FIXED_WEEKLY_ORIGIN;
+  const stepLabels = isFixedWeeklyOrigin ? FIXED_WEEKLY_STEP_LABELS : STEP_LABELS;
 
   function handleOriginSelect(next: string) {
     setOrigin(next);
@@ -439,20 +779,82 @@ function DebtFinancingWizard({
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="dragon_id" value={dragonId} />
-      <input type="hidden" name="institution" value={originInstitution?.id ?? ""} />
-      <input type="hidden" name="interest_rate" value={isCustomNoInterest ? "" : rateValue} />
-      <input type="hidden" name="minimum_payment" value={minimumPaymentValue} />
-      <input type="hidden" name="total_amount" value={totalAmount} />
-      <input type="hidden" name="term_months" value={termMonths} />
-      <input type="hidden" name="extra_payment" value={Number(extraPaymentValue || "0").toFixed(2)} />
+      <input type="hidden" name="schedule_mode" value={isFixedWeeklyOrigin ? "fixed_weekly" : ""} />
+      {isFixedWeeklyOrigin ? (
+        <>
+          <input type="hidden" name="principal_amount" value={principalAmount} />
+          <input type="hidden" name="weekly_payment" value={weeklyPayment} />
+          <input type="hidden" name="total_installments" value={totalInstallments} />
+          <input type="hidden" name="installments_paid" value={installmentsPaid} />
+          <input type="hidden" name="payment_day_of_week" value={paymentDayOfWeek} />
+          <input type="hidden" name="disbursement_date" value={disbursementDate} />
+          <input type="hidden" name="payoff_today_amount" value={payoffTodayAmount} />
+        </>
+      ) : (
+        <>
+          <input type="hidden" name="institution" value={originInstitution?.id ?? ""} />
+          <input type="hidden" name="interest_rate" value={isCustomNoInterest ? "" : rateValue} />
+          <input type="hidden" name="minimum_payment" value={minimumPaymentValue} />
+          <input type="hidden" name="total_amount" value={totalAmount} />
+          <input type="hidden" name="term_months" value={termMonths} />
+          <input type="hidden" name="extra_payment" value={Number(extraPaymentValue || "0").toFixed(2)} />
+        </>
+      )}
 
-      <WizardProgress steps={STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
+      <WizardProgress steps={stepLabels} step={step} maxReached={maxReached} onJump={goTo} />
 
-      <WizardStepHeader label={STEP_LABELS[step]} step={step} onBack={() => goTo(step - 1)} />
+      <WizardStepHeader label={stepLabels[step]} step={step} onBack={() => goTo(step - 1)} />
 
       <div key={step} className="animate-in fade-in-0 slide-in-from-right-2 duration-200">
         {step === 0 && <OriginStep value={origin} onSelect={handleOriginSelect} />}
-        {step === 1 && (
+        {isFixedWeeklyOrigin && step === 1 && (
+          <FixedWeeklyAmountsStep
+            principalAmount={principalAmount}
+            onPrincipalAmountChange={setPrincipalAmount}
+            weeklyPayment={weeklyPayment}
+            onWeeklyPaymentChange={setWeeklyPayment}
+            onNext={() => goTo(2)}
+          />
+        )}
+        {isFixedWeeklyOrigin && step === 2 && (
+          <FixedWeeklyTermStep
+            totalInstallments={totalInstallments}
+            onTotalInstallmentsChange={setTotalInstallments}
+            installmentsPaid={installmentsPaid}
+            onInstallmentsPaidChange={setInstallmentsPaid}
+            onNext={() => goTo(3)}
+          />
+        )}
+        {isFixedWeeklyOrigin && step === 3 && (
+          <FixedWeeklyScheduleStep
+            paymentDayOfWeek={paymentDayOfWeek}
+            onPaymentDayOfWeekChange={setPaymentDayOfWeek}
+            disbursementDate={disbursementDate}
+            onDisbursementDateChange={setDisbursementDate}
+            onNext={() => goTo(4)}
+          />
+        )}
+        {isFixedWeeklyOrigin && step === 4 && (
+          <FixedWeeklyPayoffTodayStep
+            payoffTodayAmount={payoffTodayAmount}
+            onPayoffTodayAmountChange={setPayoffTodayAmount}
+            onNext={() => goTo(5)}
+          />
+        )}
+        {isFixedWeeklyOrigin && step === 5 && (
+          <FixedWeeklyReviewStep
+            principalAmount={principalAmount}
+            weeklyPayment={weeklyPayment}
+            totalInstallments={totalInstallments}
+            installmentsPaid={installmentsPaid}
+            paymentDayOfWeek={paymentDayOfWeek}
+            disbursementDate={disbursementDate}
+            payoffTodayAmount={payoffTodayAmount}
+            error={state.error}
+            onEditStep={goTo}
+          />
+        )}
+        {step === 1 && !isFixedWeeklyOrigin && (
           <DetailsStep
             isFixedPlan={isFixedPlan}
             isCustomNoInterest={isCustomNoInterest}
@@ -467,10 +869,10 @@ function DebtFinancingWizard({
             onNext={() => goTo(2)}
           />
         )}
-        {step === 2 && (
+        {step === 2 && !isFixedWeeklyOrigin && (
           <ExtraPaymentStep value={extraPaymentValue} onChange={setExtraPaymentValue} onNext={() => goTo(3)} />
         )}
-        {step === 3 && (
+        {step === 3 && !isFixedWeeklyOrigin && (
           <ReviewStep
             origin={origin}
             isFixedPlan={isFixedPlan}
@@ -492,18 +894,34 @@ export function DebtFinancingDialog({
   dragonId,
   dragonName,
   pendingBalance,
+  currentAmount,
   institution,
   interestRate,
   minimumPayment,
   extraPayment,
+  paymentSchedule,
+  principalAmount,
+  weeklyPayment,
+  totalInstallments,
+  paymentDayOfWeek,
+  disbursementDate,
+  payoffTodayAmount,
 }: {
   dragonId: string;
   dragonName: string;
   pendingBalance: number;
+  currentAmount: number;
   institution: string | null;
   interestRate: number | null;
   minimumPayment: number | null;
   extraPayment: number;
+  paymentSchedule: string | null;
+  principalAmount: number | null;
+  weeklyPayment: number | null;
+  totalInstallments: number | null;
+  paymentDayOfWeek: number | null;
+  disbursementDate: string | null;
+  payoffTodayAmount: number | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -537,16 +955,26 @@ export function DebtFinancingDialog({
             interestRate={interestRate}
             minimumPayment={minimumPayment}
             extraPayment={extraPayment}
+            paymentSchedule={paymentSchedule}
+            currentAmount={currentAmount}
+            principalAmount={principalAmount}
+            weeklyPayment={weeklyPayment}
+            totalInstallments={totalInstallments}
+            paymentDayOfWeek={paymentDayOfWeek}
+            disbursementDate={disbursementDate}
+            payoffTodayAmount={payoffTodayAmount}
             onSuccess={() => setOpen(false)}
           />
         )}
 
-        <ExtraPaymentSimulator
-          pendingBalance={pendingBalance}
-          annualRate={interestRate}
-          minimumPayment={minimumPayment}
-          savedExtraPayment={extraPayment}
-        />
+        {paymentSchedule !== "fixed_weekly" && (
+          <ExtraPaymentSimulator
+            pendingBalance={pendingBalance}
+            annualRate={interestRate}
+            minimumPayment={minimumPayment}
+            savedExtraPayment={extraPayment}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
