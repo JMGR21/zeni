@@ -13,7 +13,6 @@ import { LevelBadge } from "@/components/level-badge";
 import { PendingRecurringOccurrences, type PendingOccurrence } from "@/components/pending-recurring-occurrences";
 import { RecentTransactions, type RecentTransaction } from "@/components/recent-transactions";
 import { StatTile, type StatDelta } from "@/components/stat-tile";
-import { TotalBalanceStatTile } from "@/components/total-balance-stat-tile";
 import { TransformationOverlay } from "@/components/transformation-overlay";
 import { TrendChartCard } from "@/components/trend-chart-card";
 import { ACHIEVEMENTS } from "@/lib/achievements";
@@ -25,8 +24,8 @@ import type { KiScorePoint } from "@/components/ki-evolution-chart";
 import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
 import { getMonthlyIncomeExpenseSeries, type MonthlyFlow } from "@/lib/monthly-summary";
-import { computeIncomingBuffer, computeNetBalance } from "@/lib/monthly-balance";
-import { getTotalBalance } from "@/lib/total-balance";
+import { computeNetBalanceWithCushion } from "@/lib/monthly-balance";
+import { getAvailableBalanceAsOf } from "@/lib/total-balance";
 import { computePeriodStart, periodRangeFromStart, parsePeriodISODate, shiftPeriodStart, toISODate } from "@/lib/period";
 import { evaluateGeneralAchievements } from "@/lib/achievement-engine";
 import type { AchievementDefinition } from "@/lib/achievements";
@@ -112,7 +111,6 @@ export default async function DashboardPage({
     { data: pendingOccurrenceRows },
     monthlyFlow,
     { data: latestAchievementRow },
-    totalBalance,
   ] = await Promise.all([
     supabase
       .from("transactions")
@@ -121,14 +119,12 @@ export default async function DashboardPage({
       .lt("occurred_on", end),
     supabase
       .from("transactions")
-      .select("type, amount, reserved_for_next_period")
+      .select("type, amount")
       .gte("occurred_on", prevStart)
       .lt("occurred_on", prevEnd),
     supabase
       .from("transactions")
-      .select(
-        "id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name), reserved_for_next_period",
-      )
+      .select("id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)")
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(10)
@@ -173,7 +169,6 @@ export default async function DashboardPage({
           .limit(1)
           .maybeSingle<{ achievement_slug: string; unlocked_at: string }>()
       : Promise.resolve({ data: null }),
-    user ? getTotalBalance(supabase, user.id) : Promise.resolve({ totalBalance: 0, availableBalance: 0, savedInDragons: 0 }),
   ]);
 
   const pendingOccurrences: PendingOccurrence[] = (pendingOccurrenceRows ?? [])
@@ -233,11 +228,14 @@ export default async function DashboardPage({
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const prevBalance = prevIncome - prevExpenses;
 
-  const prevReservedIncome = (previousMonthTransactions ?? [])
-    .filter((transaction) => transaction.type === "income" && transaction.reserved_for_next_period)
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const incomingBuffer = computeIncomingBuffer({ income: prevIncome, expense: prevExpenses, reservedIncome: prevReservedIncome });
-  const netBalance = computeNetBalance(balance, incomingBuffer);
+  // Colchón: si el periodo cerró en negativo, el Saldo Disponible real que
+  // el usuario ya tenía acumulado al FINAL del periodo anterior (no un
+  // ingreso marcado a mano) cubre el bache — ver `getAvailableBalanceAsOf`.
+  const cutoffDate = new Date(periodStartDate.getFullYear(), periodStartDate.getMonth(), periodStartDate.getDate() - 1);
+  const availableBalanceEndOfPreviousPeriod = user ? await getAvailableBalanceAsOf(supabase, user.id, cutoffDate) : 0;
+  const netBalance = computeNetBalanceWithCushion(balance, availableBalanceEndOfPreviousPeriod);
+  const cushionApplied = balance < 0 ? Math.min(-balance, Math.max(0, availableBalanceEndOfPreviousPeriod)) : 0;
+  const uncoveredShortfall = balance < 0 ? -balance - cushionApplied : 0;
 
   const balanceDelta = buildDelta(balance, prevBalance, "higherIsBetter");
   const incomeDelta = buildDelta(income, prevIncome, "higherIsBetter");
@@ -289,7 +287,7 @@ export default async function DashboardPage({
         dragons={dragonOptions}
       />
 
-      <section className="mx-auto grid w-full max-w-5xl grid-cols-2 gap-4 px-6 pt-6 lg:grid-cols-5">
+      <section className="mx-auto grid w-full max-w-5xl grid-cols-2 gap-4 px-6 pt-6 lg:grid-cols-4">
         <StatTile
           icon={<Wallet className="size-3.5" aria-hidden="true" />}
           label="Saldo del periodo"
@@ -297,16 +295,17 @@ export default async function DashboardPage({
           delta={balanceDelta}
           deltaLabel="vs. periodo anterior"
           infoTooltip={
-            incomingBuffer !== 0
-              ? "Un ingreso marcado como colchón se cuenta en el periodo en que ocurrió, pero si sobra, ayuda a cubrir un balance negativo del periodo siguiente. No se acumula más de un periodo."
+            cushionApplied > 0
+              ? "Cuando el periodo cierra en negativo, tu Saldo Disponible acumulado hasta el periodo anterior cubre el bache, hasta donde alcance — nunca convierte un mes malo en uno positivo."
               : undefined
           }
           bufferBreakdown={
-            incomingBuffer !== 0
+            cushionApplied > 0
               ? {
                   rawBalance: currencyFormatter.format(balance),
-                  incomingBuffer: `${incomingBuffer > 0 ? "+" : ""}${currencyFormatter.format(incomingBuffer)}`,
+                  covered: `+${currencyFormatter.format(cushionApplied)}`,
                   netBalance: currencyFormatter.format(netBalance),
+                  uncovered: uncoveredShortfall > 0 ? currencyFormatter.format(-uncoveredShortfall) : undefined,
                 }
               : undefined
           }
@@ -324,11 +323,6 @@ export default async function DashboardPage({
           value={currencyFormatter.format(expenses)}
           delta={expensesDelta}
           deltaLabel="vs. periodo anterior"
-        />
-        <TotalBalanceStatTile
-          totalBalance={totalBalance.totalBalance}
-          availableBalance={totalBalance.availableBalance}
-          savedInDragons={totalBalance.savedInDragons}
         />
         <KiStatTile score={kiScore} />
       </section>

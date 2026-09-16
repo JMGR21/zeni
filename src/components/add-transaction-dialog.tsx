@@ -42,7 +42,6 @@ export type EditableTransaction = {
   description: string | null;
   occurred_on: string;
   dragon_id: string | null;
-  reserved_for_next_period?: boolean;
 };
 
 const NO_DRAGON = "none";
@@ -177,8 +176,6 @@ function ReviewStep({
   dragons,
   dragonId,
   onDragonChange,
-  reservedForNextPeriod,
-  onReservedForNextPeriodChange,
   error,
   submitLabel,
   onEditStep,
@@ -191,8 +188,6 @@ function ReviewStep({
   dragons: DragonOption[];
   dragonId: string | null;
   onDragonChange: (next: string | null) => void;
-  reservedForNextPeriod: boolean;
-  onReservedForNextPeriodChange: (next: boolean) => void;
   error?: string;
   submitLabel: string;
   onEditStep: (step: number) => void;
@@ -245,23 +240,6 @@ function ReviewStep({
           </Select>
         </div>
       )}
-      {type === "income" && (
-        <div className="space-y-1">
-          <label className="flex items-center gap-2 text-xs text-ink-muted">
-            <input
-              type="checkbox"
-              checked={reservedForNextPeriod}
-              onChange={(event) => onReservedForNextPeriodChange(event.target.checked)}
-              className="size-4 rounded border-ink-muted/30 bg-void/40 accent-ki-awakening"
-            />
-            Reservar como colchón para el siguiente periodo
-          </label>
-          <p className="pl-6 text-xs text-ink-muted/70">
-            Este ingreso se contará en este periodo, pero si sobra, ayuda a cubrir un balance negativo del
-            periodo siguiente.
-          </p>
-        </div>
-      )}
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -294,7 +272,6 @@ function TransactionWizard({
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
   const [categoryId, setCategoryId] = useState<string | null>(transaction?.category_id ?? null);
   const [dragonId, setDragonId] = useState<string | null>(transaction?.dragon_id ?? null);
-  const [reservedForNextPeriod, setReservedForNextPeriod] = useState(transaction?.reserved_for_next_period ?? false);
   const [date, setDate] = useState(() =>
     transaction ? new Date(`${transaction.occurred_on}T00:00:00`) : new Date(),
   );
@@ -319,11 +296,6 @@ function TransactionWizard({
       <input type="hidden" name="category_id" value={categoryId ?? ""} />
       <input type="hidden" name="occurred_on" value={toISODate(date)} />
       <input type="hidden" name="dragon_id" value={type === "expense" ? (dragonId ?? "") : ""} />
-      <input
-        type="hidden"
-        name="reserved_for_next_period"
-        value={type === "income" && reservedForNextPeriod ? "on" : ""}
-      />
 
       <WizardProgress steps={STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
 
@@ -336,7 +308,6 @@ function TransactionWizard({
               setType(selected);
               setCategoryId(null);
               setDragonId(null);
-              setReservedForNextPeriod(false);
               goTo(1);
             }}
           />
@@ -370,8 +341,6 @@ function TransactionWizard({
             dragons={dragons}
             dragonId={dragonId}
             onDragonChange={setDragonId}
-            reservedForNextPeriod={reservedForNextPeriod}
-            onReservedForNextPeriodChange={setReservedForNextPeriod}
             error={state.error}
             submitLabel={isEdit ? "Guardar cambios" : "Guardar movimiento"}
             onEditStep={goTo}

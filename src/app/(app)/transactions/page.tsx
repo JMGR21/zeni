@@ -45,7 +45,7 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      "id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name), reserved_for_next_period",
+      "id, type, amount, description, occurred_on, category_id, categories(name), dragon_id, dragons(name)",
       { count: "exact" },
     )
     .order("occurred_on", { ascending: false })

@@ -49,3 +49,74 @@ export async function getTotalBalance(supabase: SupabaseClient, userId: string):
 
   return { totalBalance, availableBalance, savedInDragons };
 }
+
+function toISODateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Saldo Disponible histórico "a una fecha de corte" — usado por el
+ * colchón del motor de Ki (`monthly-balance.ts`) para saber cuánto saldo
+ * disponible existía al FINAL de un mes/periodo específico, no hoy. Misma
+ * lógica que `getTotalBalance`, pero:
+ * - filtra transacciones con `occurred_on <= asOfDate`
+ * - lo apartado en Dragones de ahorro se suma desde la BITÁCORA
+ *   (`dragon_contributions.created_at <= asOfDate`, fin del día), no desde
+ *   `dragons.current_amount` — ese es el total EN VIVO de hoy, no el que
+ *   había a esa fecha.
+ */
+export async function getAvailableBalanceAsOf(
+  supabase: SupabaseClient,
+  userId: string,
+  asOfDate: Date,
+): Promise<number> {
+  const asOfDateStr = toISODateString(asOfDate);
+  const asOfEndOfDay = new Date(
+    asOfDate.getFullYear(),
+    asOfDate.getMonth(),
+    asOfDate.getDate(),
+    23,
+    59,
+    59,
+    999,
+  ).toISOString();
+
+  const [{ data: profile }, { data: transactions }, { data: contributions }] = await Promise.all([
+    supabase.from("profiles").select("initial_balance").eq("id", userId).maybeSingle<{ initial_balance: number }>(),
+    supabase
+      .from("transactions")
+      .select("type, amount, dragons(type)")
+      .eq("user_id", userId)
+      .lte("occurred_on", asOfDateStr)
+      .returns<{ type: "income" | "expense"; amount: number; dragons: { type: "savings" | "debt" } | null }[]>(),
+    supabase
+      .from("dragon_contributions")
+      .select("amount, dragons(type)")
+      .eq("user_id", userId)
+      .lte("created_at", asOfEndOfDay)
+      .returns<{ amount: number; dragons: { type: "savings" | "debt" } | null }[]>(),
+  ]);
+
+  const initialBalance = profile?.initial_balance ?? 0;
+
+  let totalBalance = initialBalance;
+  for (const transaction of transactions ?? []) {
+    if (transaction.type === "income") {
+      totalBalance += transaction.amount;
+    } else {
+      totalBalance -= transaction.amount;
+      if (transaction.dragons?.type === "savings") {
+        totalBalance += transaction.amount;
+      }
+    }
+  }
+
+  const savedInDragons = (contributions ?? [])
+    .filter((row) => row.dragons?.type === "savings")
+    .reduce((sum, row) => sum + row.amount, 0);
+
+  return totalBalance - savedInDragons;
+}

@@ -39,7 +39,6 @@ export async function addTransaction(
   const categoryId = getField(formData, "category_id");
   const description = getField(formData, "description");
   const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
-  const reservedForNextPeriod = type === "income" && getField(formData, "reserved_for_next_period") === "on";
 
   const supabase = await createClient();
   const {
@@ -55,7 +54,6 @@ export async function addTransaction(
     description: description || null,
     occurredOn,
     dragonId: dragonId || null,
-    reservedForNextPeriod,
   });
   if (!inserted.success) return { error: inserted.error };
   const achievements: AchievementDefinition[] = [...inserted.achievements];
@@ -111,7 +109,6 @@ export async function updateTransaction(
   const categoryId = getField(formData, "category_id");
   const description = getField(formData, "description");
   const dragonId = type === "expense" ? getField(formData, "dragon_id") : "";
-  const reservedForNextPeriod = type === "income" && getField(formData, "reserved_for_next_period") === "on";
 
   const supabase = await createClient();
   const {
@@ -136,7 +133,6 @@ export async function updateTransaction(
       description: description || null,
       occurred_on: occurredOn,
       dragon_id: dragonId || null,
-      reserved_for_next_period: reservedForNextPeriod,
     })
     .eq("id", id)
     .eq("user_id", user.id);

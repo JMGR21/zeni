@@ -22,7 +22,8 @@ import {
   type KiBreakdown,
   type MomentumInputs,
 } from "@/lib/ki-calculations";
-import { computeIncomingBuffer, computeNetBalance } from "@/lib/monthly-balance";
+import { computeNetBalanceWithCushion } from "@/lib/monthly-balance";
+import { getAvailableBalanceAsOf } from "@/lib/total-balance";
 
 export type KiCalculationResult = {
   score: number;
@@ -45,13 +46,7 @@ function monthStart(from: Date, monthsAgo: number): Date {
   return new Date(from.getFullYear(), from.getMonth() - monthsAgo, 1);
 }
 
-type TransactionRow = {
-  type: "income" | "expense";
-  amount: number;
-  occurred_on: string;
-  category_id: string | null;
-  reserved_for_next_period: boolean;
-};
+type TransactionRow = { type: "income" | "expense"; amount: number; occurred_on: string; category_id: string | null };
 
 function sumByTypeInRange(rows: TransactionRow[], type: "income" | "expense", start: string, end: string): number {
   return rows
@@ -59,10 +54,10 @@ function sumByTypeInRange(rows: TransactionRow[], type: "income" | "expense", st
     .reduce((sum, row) => sum + row.amount, 0);
 }
 
-function sumReservedIncomeInRange(rows: TransactionRow[], start: string, end: string): number {
-  return rows
-    .filter((row) => row.type === "income" && row.reserved_for_next_period && row.occurred_on >= start && row.occurred_on < end)
-    .reduce((sum, row) => sum + row.amount, 0);
+// Un día antes de que empiece el mes calendario que arranca en `monthStart`
+// — el corte para "saldo disponible al final del mes anterior".
+function dayBefore(monthStartDate: Date): Date {
+  return new Date(monthStartDate.getFullYear(), monthStartDate.getMonth(), monthStartDate.getDate() - 1);
 }
 
 type ContributionRow = { dragon_id: string; amount: number; created_at: string };
@@ -102,13 +97,8 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const currentMonthStart = monthStart(referenceDate, 0);
   const previousMonthStart = monthStart(referenceDate, 1);
   const twoMonthsAgoStart = monthStart(referenceDate, 2);
-  // Un mes más atrás que antes: para netear el balance de "twoMonthsAgo" en
-  // la Salvaguarda hace falta el colchón que entró a ESE mes, es decir, el
-  // ingreso reservado del mes anterior a él.
-  const threeMonthsAgoStart = monthStart(referenceDate, 3);
   const nextMonthStart = monthStart(referenceDate, -1);
 
-  const b3 = toISODate(threeMonthsAgoStart);
   const b2 = toISODate(twoMonthsAgoStart);
   const b1 = toISODate(previousMonthStart);
   const b0 = toISODate(currentMonthStart);
@@ -117,9 +107,9 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const [transactionsRes, dragonsRes, contributionsRes, categoriesRes, budgetsRes, earliestRes] = await Promise.all([
     supabase
       .from("transactions")
-      .select("type, amount, occurred_on, category_id, reserved_for_next_period")
+      .select("type, amount, occurred_on, category_id")
       .eq("user_id", userId)
-      .gte("occurred_on", b3)
+      .gte("occurred_on", b2)
       .lt("occurred_on", bNext),
     supabase
       .from("dragons")
@@ -148,15 +138,16 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const budgets = budgetsRes.data ?? [];
   const earliest = earliestRes.data;
 
-  // --- Colchón: ingresos marcados "reservados para el siguiente periodo" ---
-  // trasladan lo que no se usó UN SOLO mes hacia adelante (ver
-  // `monthly-balance.ts`). Se calcula para los 3 meses que alimentan la
-  // fórmula de Ki (actual, anterior, hace dos meses).
-  const previousReservedIncome = sumReservedIncomeInRange(transactions, b1, b0);
-  const twoAgoReservedIncome = sumReservedIncomeInRange(transactions, b2, b1);
-  const threeAgoIncome = sumByTypeInRange(transactions, "income", b3, b2);
-  const threeAgoExpense = sumByTypeInRange(transactions, "expense", b3, b2);
-  const threeAgoReservedIncome = sumReservedIncomeInRange(transactions, b3, b2);
+  // --- Colchón: Saldo Disponible que el usuario ya tenía acumulado al
+  // final de cada mes anterior (ver `getAvailableBalanceAsOf`), no un
+  // ingreso marcado a mano. Se calcula para los 3 cortes que alimentan la
+  // fórmula de Ki (fin de mes anterior, fin de hace dos meses, fin de hace
+  // tres meses).
+  const [availableEndOfPreviousMonth, availableEndOfTwoAgoMonth, availableEndOfThreeAgoMonth] = await Promise.all([
+    getAvailableBalanceAsOf(supabase, userId, dayBefore(currentMonthStart)),
+    getAvailableBalanceAsOf(supabase, userId, dayBefore(previousMonthStart)),
+    getAvailableBalanceAsOf(supabase, userId, dayBefore(twoMonthsAgoStart)),
+  ]);
 
   // --- Salud Actual (35%) ---
   const currentIncome = sumByTypeInRange(transactions, "income", b0, bNext);
@@ -165,12 +156,7 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
     .filter((dragon) => dragon.type === "debt" && dragon.status === "active")
     .reduce((sum, dragon) => sum + (dragon.minimum_payment ?? 0) + (dragon.extra_payment ?? 0), 0);
 
-  const bufferIntoCurrent = computeIncomingBuffer({
-    income: sumByTypeInRange(transactions, "income", b1, b0),
-    expense: sumByTypeInRange(transactions, "expense", b1, b0),
-    reservedIncome: previousReservedIncome,
-  });
-  const netCurrentBalance = computeNetBalance(currentIncome - currentExpense, bufferIntoCurrent);
+  const netCurrentBalance = computeNetBalanceWithCushion(currentIncome - currentExpense, availableEndOfPreviousMonth);
   const saludActual = computeSaludActual(currentIncome, netCurrentBalance, debtPayments);
 
   // --- Momentum (35%) ---
@@ -180,12 +166,7 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const twoAgoIncome = sumByTypeInRange(transactions, "income", b2, b1);
   const twoAgoExpense = sumByTypeInRange(transactions, "expense", b2, b1);
 
-  const bufferIntoPrevious = computeIncomingBuffer({
-    income: twoAgoIncome,
-    expense: twoAgoExpense,
-    reservedIncome: twoAgoReservedIncome,
-  });
-  const netPreviousBalance = computeNetBalance(previousIncome - previousExpense, bufferIntoPrevious);
+  const netPreviousBalance = computeNetBalanceWithCushion(previousIncome - previousExpense, availableEndOfTwoAgoMonth);
 
   // Menos de un mes de antigüedad: no hay ningún dato anterior al mes en
   // curso, así que el momentum es neutral en vez de comparar contra nada.
@@ -247,12 +228,7 @@ export async function calculateKi(userId: string, referenceDate: Date = new Date
   const breakdown: KiBreakdown = { saludActual, momentum, presupuesto, constancia };
 
   // --- Salvaguarda ---
-  const bufferIntoTwoAgo = computeIncomingBuffer({
-    income: threeAgoIncome,
-    expense: threeAgoExpense,
-    reservedIncome: threeAgoReservedIncome,
-  });
-  const netBalanceTwoMonthsAgo = computeNetBalance(twoAgoIncome - twoAgoExpense, bufferIntoTwoAgo);
+  const netBalanceTwoMonthsAgo = computeNetBalanceWithCushion(twoAgoIncome - twoAgoExpense, availableEndOfThreeAgoMonth);
   const bothMonthsNegative = netPreviousBalance < 0 && netBalanceTwoMonthsAgo < 0;
 
   const contributionsByDragonLastMonth = new Map<string, number>();

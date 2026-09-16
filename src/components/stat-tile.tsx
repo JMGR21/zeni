@@ -28,13 +28,14 @@ export function StatTile({
   delta?: StatDelta | null;
   deltaLabel?: string;
   // Explicación breve mostrada en un Popover junto a la etiqueta — usado
-  // por el colchón de ingreso reservado para que el desglose no se sienta
+  // por el colchón del Saldo Disponible para que el desglose no se sienta
   // como un número inconsistente sin contexto.
   infoTooltip?: string;
-  // Cuando el periodo recibió un colchón entrante (ver `monthly-balance.ts`),
-  // sustituye el número simple por bruto/colchón/neto — el bruto nunca se
-  // oculta, el colchón se muestra como contexto adicional.
-  bufferBreakdown?: { rawBalance: string; incomingBuffer: string; netBalance: string };
+  // Cuando el periodo cerró en negativo y el Saldo Disponible acumulado
+  // cubrió algo del bache (ver `monthly-balance.ts`), sustituye el número
+  // simple por bruto/cubierto/neto — el bruto nunca se oculta. `uncovered`
+  // solo aparece si el Saldo Disponible no alcanzó a cubrir todo el bache.
+  bufferBreakdown?: { rawBalance: string; covered: string; netBalance: string; uncovered?: string };
 }) {
   const isIncrease = delta ? delta.percent > 0 : null;
   const isGood =
@@ -73,9 +74,15 @@ export function StatTile({
             <span className="font-mono text-sm text-ink">{bufferBreakdown.rawBalance}</span>
           </div>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs text-ink-muted">Colchón del periodo anterior</span>
-            <span className="font-mono text-sm text-ki-saiyan">{bufferBreakdown.incomingBuffer}</span>
+            <span className="text-xs text-ink-muted">Cubierto con tu Saldo Disponible</span>
+            <span className="font-mono text-sm text-ki-saiyan">{bufferBreakdown.covered}</span>
           </div>
+          {bufferBreakdown.uncovered && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-ink-muted">Aún descubierto</span>
+              <span className="font-mono text-sm text-ki-survival">{bufferBreakdown.uncovered}</span>
+            </div>
+          )}
           <div className="flex items-baseline justify-between gap-2 border-t border-ink-muted/10 pt-1">
             <span className="text-xs font-medium text-ink-muted">Balance neto</span>
             <span className="font-mono text-lg text-ink">{bufferBreakdown.netBalance}</span>
