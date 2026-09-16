@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AppNav } from "@/components/app-nav";
 import { ProfileMenu } from "@/components/profile-menu";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,10 @@ export async function AppHeader() {
   return (
     <header className="flex items-center justify-between border-b border-ink-muted/10 px-6 py-4">
       <div className="flex items-center gap-8">
-        <span className="font-display text-xl font-bold tracking-[0.2em]">ZENI</span>
+        <span className="flex items-center gap-2">
+          <Image src="/brand/zeni-icon.png" alt="" width={24} height={24} className="size-6" />
+          <span className="font-display text-xl font-bold tracking-[0.2em]">ZENI</span>
+        </span>
         <AppNav />
       </div>
       <ProfileMenu avatarId={avatarId} />
