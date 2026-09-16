@@ -6,7 +6,7 @@ import type { MonthlyFlow } from "@/lib/monthly-summary";
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 const monthFormatter = new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" });

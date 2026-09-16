@@ -5,7 +5,7 @@ import { resolveBudgetedAmount, type BudgetCategory } from "@/lib/budget";
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 export function BudgetSummary({ categories }: { categories: BudgetCategory[] }) {

@@ -6,7 +6,7 @@ import { ChartPie } from "lucide-react";
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 export type CategorySpending = { name: string; value: number };

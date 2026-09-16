@@ -32,7 +32,7 @@ import { createClient } from "@/lib/supabase/server";
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 // Límites del mes calendario REAL (siempre día 1 a fin de mes) — separado

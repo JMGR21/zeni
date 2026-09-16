@@ -7,7 +7,7 @@ import { simulateDebtPayoff, type DebtPayoffInput, type DebtPayoffResult } from 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 function monthsLabel(months: number) {
