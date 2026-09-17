@@ -2,19 +2,39 @@ import { Scale } from "lucide-react";
 import Link from "next/link";
 import { FiftyThirtyTwentyBars } from "@/components/fifty-thirty-twenty-bars";
 import { FiftyThirtyTwentyHistoryChart } from "@/components/fifty-thirty-twenty-history-chart";
+import { FiftyThirtyTwentyMonthSelector } from "@/components/fifty-thirty-twenty-month-selector";
 import { computeFiftyThirtyTwenty, getFiftyThirtyTwentyHistory } from "@/lib/fifty-thirty-twenty";
+import { computePeriodStart, parsePeriodISODate, toISODate } from "@/lib/period";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function FiftyThirtyTwentyPage() {
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function FiftyThirtyTwentyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const currentMonthStart = computePeriodStart(new Date(), 1);
+  const monthParam = firstParam(params.month);
+  const requestedMonth = monthParam && ISO_DATE_RE.test(monthParam) ? parsePeriodISODate(monthParam) : currentMonthStart;
+  // No tiene sentido navegar a un mes futuro — no hay datos que mostrar.
+  const selectedMonth = requestedMonth.getTime() > currentMonthStart.getTime() ? currentMonthStart : requestedMonth;
+  const isCurrentMonth = toISODate(selectedMonth) === toISODate(currentMonthStart);
+
   const [result, history] = await Promise.all([
-    computeFiftyThirtyTwenty(supabase, user.id, new Date()),
-    getFiftyThirtyTwentyHistory(supabase, user.id, 12),
+    computeFiftyThirtyTwenty(supabase, user.id, selectedMonth),
+    getFiftyThirtyTwentyHistory(supabase, user.id, 6),
   ]);
 
   return (
@@ -35,13 +55,20 @@ export default async function FiftyThirtyTwentyPage() {
         tu gasto está balanceado.
       </p>
 
-      <div className="mt-8 rounded-xl border border-ink-muted/15 bg-void/40 p-5">
+      <div className="mt-8 flex items-center justify-between gap-2">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+          Detalle del mes
+        </h2>
+        <FiftyThirtyTwentyMonthSelector monthISO={toISODate(selectedMonth)} isCurrentMonth={isCurrentMonth} />
+      </div>
+      <div className="mt-4 rounded-xl border border-ink-muted/15 bg-void/40 p-5">
         {result ? (
           <FiftyThirtyTwentyBars result={result} />
         ) : (
           <p className="text-sm text-ink-muted">
-            Aún no registras ingresos este mes — la Regla 50/30/20 necesita un ingreso base para calcular
-            porcentajes.
+            {isCurrentMonth
+              ? "Aún no registras ingresos este mes — la Regla 50/30/20 necesita un ingreso base para calcular porcentajes."
+              : "No registraste ingresos ese mes — la Regla 50/30/20 necesita un ingreso base para calcular porcentajes."}
           </p>
         )}
       </div>
