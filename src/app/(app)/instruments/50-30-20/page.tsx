@@ -1,4 +1,5 @@
 import { Scale } from "lucide-react";
+import Link from "next/link";
 import { FiftyThirtyTwentyBars } from "@/components/fifty-thirty-twenty-bars";
 import { computeFiftyThirtyTwenty } from "@/lib/fifty-thirty-twenty";
 import { createClient } from "@/lib/supabase/server";
@@ -22,7 +23,12 @@ export default async function FiftyThirtyTwentyPage() {
       <p className="mt-1 text-sm text-ink-muted">
         Divide tu ingreso del mes en tres partes: 50% Necesidad (renta, comida, servicios — lo que no puedes dejar
         de pagar), 30% Deseo (todo lo demás: gustos, salidas, entretenimiento) y 20% Ahorro/Deuda (lo que apartas en
-        tus Dragones). No es una regla estricta, es una guía rápida para ver si tu gasto está balanceado.
+        tus Dragones, más el gasto en categorías que clasifiques como Ahorro/Deuda en{" "}
+        <Link href="/categories" className="text-ki-awakening hover:underline">
+          Categorías
+        </Link>{" "}
+        — para deudas que pagas sin llevarlas como Dragón). No es una regla estricta, es una guía rápida para ver si
+        tu gasto está balanceado.
       </p>
 
       <div className="mt-8 rounded-xl border border-ink-muted/15 bg-void/40 p-5">
