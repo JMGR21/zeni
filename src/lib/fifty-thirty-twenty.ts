@@ -11,6 +11,22 @@ export interface FiftyThirtyTwentyResult {
   unclassifiedPct: number;
 }
 
+export type FiftyThirtyTwentyMonth = { month: string; result: FiftyThirtyTwentyResult | null };
+
+type BudgetGroup = "necesidad" | "deseo" | "ahorro" | null;
+
+type Bucket = {
+  income: number;
+  necessityAmount: number;
+  wantAmount: number;
+  savingsAmount: number;
+  unclassifiedAmount: number;
+};
+
+function emptyBucket(): Bucket {
+  return { income: 0, necessityAmount: 0, wantAmount: 0, savingsAmount: 0, unclassifiedAmount: 0 };
+}
+
 function toISODate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -18,10 +34,56 @@ function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function monthStart(date: Date, offsetMonths: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + offsetMonths, 1);
+}
+
+// `income = 0` no tiene base sobre la cual calcular porcentajes, así que
+// devuelve `null` en vez de una división por cero.
+function bucketToResult(bucket: Bucket): FiftyThirtyTwentyResult | null {
+  if (bucket.income <= 0) return null;
+  return {
+    necessityAmount: bucket.necessityAmount,
+    wantAmount: bucket.wantAmount,
+    savingsAmount: bucket.savingsAmount,
+    unclassifiedAmount: bucket.unclassifiedAmount,
+    necessityPct: (bucket.necessityAmount / bucket.income) * 100,
+    wantPct: (bucket.wantAmount / bucket.income) * 100,
+    savingsPct: (bucket.savingsAmount / bucket.income) * 100,
+    unclassifiedPct: (bucket.unclassifiedAmount / bucket.income) * 100,
+  };
+}
+
+/**
+ * Reparte una transacción de gasto (ya excluidas las vinculadas a Dragón,
+ * ver nota en `computeFiftyThirtyTwenty`) en el bucket que le corresponde
+ * según `budget_group` de su categoría — `ahorro` cuenta como el 20% de
+ * Ahorro/Deuda (deudas pagadas sin llevarse como Dragón), `necesidad`/
+ * `deseo` van directo, y sin clasificar (o sin categoría) es "sin clasificar".
+ */
+function applyExpense(bucket: Bucket, amount: number, group: BudgetGroup | undefined) {
+  if (group === "necesidad") bucket.necessityAmount += amount;
+  else if (group === "deseo") bucket.wantAmount += amount;
+  else if (group === "ahorro") bucket.savingsAmount += amount;
+  else bucket.unclassifiedAmount += amount;
+}
+
+async function fetchExpenseCategoryGroups(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Map<string, BudgetGroup>> {
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("id, budget_group")
+    .eq("user_id", userId)
+    .eq("type", "expense")
+    .returns<{ id: string; budget_group: BudgetGroup }[]>();
+
+  return new Map((categories ?? []).map((category) => [category.id, category.budget_group]));
+}
+
 /**
  * Regla 50/30/20 (Necesidad/Deseo/Ahorro) para un mes calendario dado.
- * `income = 0` no tiene base sobre la cual calcular porcentajes, así que
- * devuelve `null` en vez de una división por cero.
  *
  * El 20% de Ahorro/Deuda combina dos fuentes: `dragon_contributions`
  * (abonos reales a Dragones) MÁS las transacciones de gasto en categorías
@@ -36,10 +98,10 @@ export async function computeFiftyThirtyTwenty(
   userId: string,
   month: Date,
 ): Promise<FiftyThirtyTwentyResult | null> {
-  const start = toISODate(new Date(month.getFullYear(), month.getMonth(), 1));
-  const end = toISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
+  const start = toISODate(monthStart(month, 0));
+  const end = toISODate(monthStart(month, 1));
 
-  const [{ data: incomeRows }, { data: expenseRows }, { data: categories }, { data: contributionRows }] =
+  const [{ data: incomeRows }, { data: expenseRows }, groupByCategory, { data: contributionRows }] =
     await Promise.all([
       supabase
         .from("transactions")
@@ -56,12 +118,7 @@ export async function computeFiftyThirtyTwenty(
         .is("dragon_id", null)
         .gte("occurred_on", start)
         .lt("occurred_on", end),
-      supabase
-        .from("categories")
-        .select("id, budget_group")
-        .eq("user_id", userId)
-        .eq("type", "expense")
-        .returns<{ id: string; budget_group: "necesidad" | "deseo" | "ahorro" | null }[]>(),
+      fetchExpenseCategoryGroups(supabase, userId),
       supabase
         .from("dragon_contributions")
         .select("amount")
@@ -70,34 +127,73 @@ export async function computeFiftyThirtyTwenty(
         .lt("created_at", end),
     ]);
 
-  const income = (incomeRows ?? []).reduce((sum, row) => sum + row.amount, 0);
-  if (income <= 0) return null;
-
-  const groupByCategory = new Map((categories ?? []).map((category) => [category.id, category.budget_group]));
-
-  let necessityAmount = 0;
-  let wantAmount = 0;
-  let savingsFromCategoriesAmount = 0;
-  let unclassifiedAmount = 0;
+  const bucket = emptyBucket();
+  bucket.income = (incomeRows ?? []).reduce((sum, row) => sum + row.amount, 0);
   for (const row of expenseRows ?? []) {
-    const group = row.category_id ? groupByCategory.get(row.category_id) : undefined;
-    if (group === "necesidad") necessityAmount += row.amount;
-    else if (group === "deseo") wantAmount += row.amount;
-    else if (group === "ahorro") savingsFromCategoriesAmount += row.amount;
-    else unclassifiedAmount += row.amount;
+    applyExpense(bucket, row.amount, row.category_id ? groupByCategory.get(row.category_id) : undefined);
+  }
+  bucket.savingsAmount += (contributionRows ?? []).reduce((sum, row) => sum + row.amount, 0);
+
+  return bucketToResult(bucket);
+}
+
+/**
+ * Historial mensual de la Regla 50/30/20, más reciente al final — misma
+ * idea que `getMonthlyIncomeExpenseSeries` (una sola consulta por tabla
+ * sobre toda la ventana, agregado por mes en memoria) en vez de repetir
+ * `computeFiftyThirtyTwenty` una vez por mes. Los meses sin ingreso quedan
+ * con `result: null` (nunca se inventa un porcentaje).
+ */
+export async function getFiftyThirtyTwentyHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  months = 6,
+): Promise<FiftyThirtyTwentyMonth[]> {
+  const now = new Date();
+  const earliestStart = toISODate(monthStart(now, -(months - 1)));
+  const rangeEnd = toISODate(monthStart(now, 1));
+
+  const [{ data: transactionRows }, groupByCategory, { data: contributionRows }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("type, amount, category_id, dragon_id, occurred_on")
+      .eq("user_id", userId)
+      .gte("occurred_on", earliestStart)
+      .lt("occurred_on", rangeEnd)
+      .returns<
+        { type: "income" | "expense"; amount: number; category_id: string | null; dragon_id: string | null; occurred_on: string }[]
+      >(),
+    fetchExpenseCategoryGroups(supabase, userId),
+    supabase
+      .from("dragon_contributions")
+      .select("amount, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", earliestStart)
+      .lt("created_at", rangeEnd)
+      .returns<{ amount: number; created_at: string }[]>(),
+  ]);
+
+  const byMonth = new Map<string, Bucket>();
+  for (let i = 0; i < months; i++) {
+    byMonth.set(toISODate(monthStart(now, -(months - 1) + i)), emptyBucket());
   }
 
-  const savingsFromContributionsAmount = (contributionRows ?? []).reduce((sum, row) => sum + row.amount, 0);
-  const savingsAmount = savingsFromContributionsAmount + savingsFromCategoriesAmount;
+  for (const row of transactionRows ?? []) {
+    const bucket = byMonth.get(`${row.occurred_on.slice(0, 7)}-01`);
+    if (!bucket) continue;
+    if (row.type === "income") {
+      bucket.income += row.amount;
+      continue;
+    }
+    if (row.dragon_id) continue;
+    applyExpense(bucket, row.amount, row.category_id ? groupByCategory.get(row.category_id) : undefined);
+  }
 
-  return {
-    necessityAmount,
-    wantAmount,
-    savingsAmount,
-    unclassifiedAmount,
-    necessityPct: (necessityAmount / income) * 100,
-    wantPct: (wantAmount / income) * 100,
-    savingsPct: (savingsAmount / income) * 100,
-    unclassifiedPct: (unclassifiedAmount / income) * 100,
-  };
+  for (const row of contributionRows ?? []) {
+    const bucket = byMonth.get(`${row.created_at.slice(0, 7)}-01`);
+    if (!bucket) continue;
+    bucket.savingsAmount += row.amount;
+  }
+
+  return Array.from(byMonth.entries()).map(([month, bucket]) => ({ month, result: bucketToResult(bucket) }));
 }

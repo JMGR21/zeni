@@ -1,7 +1,8 @@
 import { Scale } from "lucide-react";
 import Link from "next/link";
 import { FiftyThirtyTwentyBars } from "@/components/fifty-thirty-twenty-bars";
-import { computeFiftyThirtyTwenty } from "@/lib/fifty-thirty-twenty";
+import { FiftyThirtyTwentyHistoryChart } from "@/components/fifty-thirty-twenty-history-chart";
+import { computeFiftyThirtyTwenty, getFiftyThirtyTwentyHistory } from "@/lib/fifty-thirty-twenty";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function FiftyThirtyTwentyPage() {
@@ -11,7 +12,10 @@ export default async function FiftyThirtyTwentyPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const result = await computeFiftyThirtyTwenty(supabase, user.id, new Date());
+  const [result, history] = await Promise.all([
+    computeFiftyThirtyTwenty(supabase, user.id, new Date()),
+    getFiftyThirtyTwentyHistory(supabase, user.id, 12),
+  ]);
 
   return (
     <section className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -40,6 +44,15 @@ export default async function FiftyThirtyTwentyPage() {
             porcentajes.
           </p>
         )}
+      </div>
+
+      <div className="mt-8">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+          Histórico mensual
+        </h2>
+        <div className="mt-4 rounded-xl border border-ink-muted/15 bg-void/40 p-5">
+          <FiftyThirtyTwentyHistoryChart history={history} />
+        </div>
       </div>
     </section>
   );
