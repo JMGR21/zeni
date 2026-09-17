@@ -8,6 +8,7 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import type { Dragon } from "@/components/dragon-card";
 import { DragonsSummary } from "@/components/dragons-summary";
 import { BudgetSummary } from "@/components/budget-summary";
+import { FiftyThirtyTwentySummary } from "@/components/fifty-thirty-twenty-summary";
 import { KiStatTile } from "@/components/ki-stat-tile";
 import { LevelBadge } from "@/components/level-badge";
 import { PendingRecurringOccurrences, type PendingOccurrence } from "@/components/pending-recurring-occurrences";
@@ -24,6 +25,7 @@ import type { KiScorePoint } from "@/components/ki-evolution-chart";
 import { getLevelFromXp } from "@/lib/level";
 import { getTotalXp } from "@/lib/grant-xp";
 import { getMonthlyIncomeExpenseSeries, type MonthlyFlow } from "@/lib/monthly-summary";
+import { computeFiftyThirtyTwenty } from "@/lib/fifty-thirty-twenty";
 import { computeNetBalanceWithCushion } from "@/lib/monthly-balance";
 import { getAvailableBalanceAsOf } from "@/lib/total-balance";
 import { computePeriodStart, periodRangeFromStart, parsePeriodISODate, shiftPeriodStart, toISODate } from "@/lib/period";
@@ -111,6 +113,7 @@ export default async function DashboardPage({
     { data: pendingOccurrenceRows },
     monthlyFlow,
     { data: latestAchievementRow },
+    fiftyThirtyTwentyResult,
   ] = await Promise.all([
     supabase
       .from("transactions")
@@ -169,6 +172,7 @@ export default async function DashboardPage({
           .limit(1)
           .maybeSingle<{ achievement_slug: string; unlocked_at: string }>()
       : Promise.resolve({ data: null }),
+    user ? computeFiftyThirtyTwenty(supabase, user.id, now) : Promise.resolve(null),
   ]);
 
   const pendingOccurrences: PendingOccurrence[] = (pendingOccurrenceRows ?? [])
@@ -356,7 +360,7 @@ export default async function DashboardPage({
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-8 sm:grid-cols-2">
+      <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-8 sm:grid-cols-2 lg:grid-cols-3">
         <CategorySpendingChart data={categorySpending} />
 
         <div>
@@ -369,6 +373,18 @@ export default async function DashboardPage({
             </Link>
           </div>
           <BudgetSummary categories={budgetCategories} />
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
+              Regla 50/30/20
+            </h2>
+            <Link href="/instruments/50-30-20" className="text-sm text-ki-awakening hover:underline">
+              Ver detalle
+            </Link>
+          </div>
+          <FiftyThirtyTwentySummary result={fiftyThirtyTwentyResult} />
         </div>
       </section>
 

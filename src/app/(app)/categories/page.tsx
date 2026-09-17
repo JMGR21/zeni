@@ -14,7 +14,7 @@ export default async function CategoriesPage() {
 
   const { data: categories } = await supabase
     .from("categories")
-    .select("id, name, type, active")
+    .select("id, name, type, active, budget_group")
     .returns<CategoryRow[]>();
 
   const incomeCategories = sortCategories((categories ?? []).filter((category) => category.type === "income"));

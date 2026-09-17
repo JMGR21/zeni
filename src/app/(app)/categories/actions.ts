@@ -57,6 +57,20 @@ export async function toggleCategoryActive(id: string, active: boolean) {
   revalidatePath("/budget");
 }
 
+export async function updateCategoryBudgetGroup(id: string, budgetGroup: "necesidad" | "deseo" | null) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("categories").update({ budget_group: budgetGroup }).eq("id", id).eq("user_id", user.id);
+
+  revalidatePath("/categories");
+  revalidatePath("/dashboard");
+  revalidatePath("/instruments/50-30-20");
+}
+
 export type UpdateCategoryActionState = { error?: string; success?: boolean };
 
 export async function updateCategory(
