@@ -11,11 +11,27 @@ import {
 } from "@/app/(app)/recurring/actions";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { WizardProgress, WizardStepHeader, WizardSummaryRow } from "@/components/wizard-controls";
+import {
+  WizardProgress,
+  WizardStepHeader,
+  WizardSummaryRow,
+} from "@/components/wizard-controls";
 
 export type RecurringCategory = {
   id: string;
@@ -38,9 +54,25 @@ export type EditableRecurring = {
 type RecurringType = "income" | "expense";
 type Frequency = "weekly" | "biweekly" | "monthly";
 
-const STEP_LABELS = ["Tipo", "Nombre", "Monto", "Categoría", "Frecuencia", "Automatización", "Confirmar"] as const;
+const STEP_LABELS = [
+  "Tipo",
+  "Nombre",
+  "Monto",
+  "Categoría",
+  "Frecuencia",
+  "Automatización",
+  "Confirmar",
+] as const;
 
-const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const WEEKDAY_LABELS = [
+  "Domingo",
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
+];
 
 const FREQUENCY_LABELS: Record<Frequency, string> = {
   weekly: "Semanal",
@@ -75,7 +107,13 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-function TypeStep({ value, onSelect }: { value: RecurringType | null; onSelect: (type: RecurringType) => void }) {
+function TypeStep({
+  value,
+  onSelect,
+}: {
+  value: RecurringType | null;
+  onSelect: (type: RecurringType) => void;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <button
@@ -104,7 +142,15 @@ function TypeStep({ value, onSelect }: { value: RecurringType | null; onSelect: 
   );
 }
 
-function NameStep({ value, onChange, onNext }: { value: string; onChange: (next: string) => void; onNext: () => void }) {
+function NameStep({
+  value,
+  onChange,
+  onNext,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onNext: () => void;
+}) {
   return (
     <div className="space-y-4">
       <Input
@@ -127,11 +173,24 @@ function NameStep({ value, onChange, onNext }: { value: string; onChange: (next:
   );
 }
 
-function AmountStep({ value, onChange, onNext }: { value: string; onChange: (next: string) => void; onNext: () => void }) {
+function AmountStep({
+  value,
+  onChange,
+  onNext,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onNext: () => void;
+}) {
   const amount = Number(value || "0");
   return (
     <div className="space-y-4">
-      <AmountKeypad value={value} onChange={onChange} autoFocus ariaLabel="Monto del movimiento recurrente" />
+      <AmountKeypad
+        value={value}
+        onChange={onChange}
+        autoFocus
+        ariaLabel="Monto del movimiento recurrente"
+      />
       <Button
         type="button"
         disabled={amount <= 0}
@@ -201,7 +260,8 @@ function FrequencyStep({
             onClick={() => onFrequencyChange(option)}
             className={cn(
               "rounded-lg border border-ink-muted/15 bg-void/40 py-2.5 text-sm text-ink transition-colors hover:border-ki-awakening/50 hover:bg-ki-awakening/5",
-              frequency === option && "border-ki-awakening/60 bg-ki-awakening/10",
+              frequency === option &&
+                "border-ki-awakening/60 bg-ki-awakening/10",
             )}
           >
             {FREQUENCY_LABELS[option]}
@@ -211,10 +271,20 @@ function FrequencyStep({
 
       {frequency === "weekly" && (
         <div className="space-y-1.5">
-          <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Día de la semana</label>
-          <Select value={String(dayOfWeek)} onValueChange={(next) => onDayOfWeekChange(Number(next))}>
-            <SelectTrigger aria-label="Día de la semana" className="h-10 w-full">
-              <SelectValue>{(value: string) => WEEKDAY_LABELS[Number(value)]}</SelectValue>
+          <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            Día de la semana
+          </label>
+          <Select
+            value={String(dayOfWeek)}
+            onValueChange={(next) => onDayOfWeekChange(Number(next))}
+          >
+            <SelectTrigger
+              aria-label="Día de la semana"
+              className="h-10 w-full"
+            >
+              <SelectValue>
+                {(value: string) => WEEKDAY_LABELS[Number(value)]}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {WEEKDAY_LABELS.map((label, index) => (
@@ -229,7 +299,9 @@ function FrequencyStep({
 
       {frequency === "monthly" && (
         <div className="space-y-1.5">
-          <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Día del mes</label>
+          <label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
+            Día del mes
+          </label>
           <Input
             type="number"
             min={1}
@@ -239,7 +311,9 @@ function FrequencyStep({
             onChange={(event) => onDayOfMonthChange(Number(event.target.value))}
             className="h-10 border-ink-muted/15 bg-void/40 text-sm text-ink"
           />
-          <p className="text-xs text-ink-muted">Si el mes no tiene ese día, se usa el último día del mes.</p>
+          <p className="text-xs text-ink-muted">
+            Si el mes no tiene ese día, se usa el último día del mes.
+          </p>
         </div>
       )}
 
@@ -267,8 +341,14 @@ function AutomationStep({
     <div className="space-y-4">
       <div className="rounded-xl border border-ink-muted/15 bg-void/40 p-4">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-ink">Registro automático</span>
-          <Switch checked={autoApply} onCheckedChange={onChange} aria-label="Registro automático" />
+          <span className="text-sm font-medium text-ink">
+            Registro automático
+          </span>
+          <Switch
+            checked={autoApply}
+            onCheckedChange={onChange}
+            aria-label="Registro automático"
+          />
         </div>
         <p className="mt-2 text-xs text-ink-muted">
           {autoApply
@@ -322,12 +402,36 @@ function ReviewStep({
   return (
     <div className="space-y-4">
       <div className="space-y-2 rounded-lg border border-ink-muted/10 bg-void/40 p-3">
-        <WizardSummaryRow label="Tipo" value={type === "income" ? "Ingreso" : "Gasto"} onEdit={() => onEditStep(0)} />
-        <WizardSummaryRow label="Nombre" value={name} onEdit={() => onEditStep(1)} />
-        <WizardSummaryRow label="Monto" value={summaryCurrencyFormatter.format(amount)} onEdit={() => onEditStep(2)} />
-        <WizardSummaryRow label="Categoría" value={categoryName} onEdit={() => onEditStep(3)} />
-        <WizardSummaryRow label="Frecuencia" value={frequencyDetail} onEdit={() => onEditStep(4)} />
-        <WizardSummaryRow label="Automatización" value={autoApply ? "Automático" : "Manual"} onEdit={() => onEditStep(5)} />
+        <WizardSummaryRow
+          label="Tipo"
+          value={type === "income" ? "Ingreso" : "Gasto"}
+          onEdit={() => onEditStep(0)}
+        />
+        <WizardSummaryRow
+          label="Nombre"
+          value={name}
+          onEdit={() => onEditStep(1)}
+        />
+        <WizardSummaryRow
+          label="Monto"
+          value={summaryCurrencyFormatter.format(amount)}
+          onEdit={() => onEditStep(2)}
+        />
+        <WizardSummaryRow
+          label="Categoría"
+          value={categoryName}
+          onEdit={() => onEditStep(3)}
+        />
+        <WizardSummaryRow
+          label="Frecuencia"
+          value={frequencyDetail}
+          onEdit={() => onEditStep(4)}
+        />
+        <WizardSummaryRow
+          label="Automatización"
+          value={autoApply ? "Automático" : "Manual"}
+          onEdit={() => onEditStep(5)}
+        />
       </div>
       {error && (
         <p className="text-sm text-destructive" role="alert">
@@ -351,16 +455,31 @@ function RecurringWizard({
   recurring?: EditableRecurring;
 }) {
   const isEdit = mode === "edit" && !!recurring;
-  const [state, formAction] = useActionState(isEdit ? updateRecurringTransaction : createRecurringTransaction, initialState);
+  const [state, formAction] = useActionState(
+    isEdit ? updateRecurringTransaction : createRecurringTransaction,
+    initialState,
+  );
   const [step, setStep] = useState(0);
   const [maxReached, setMaxReached] = useState(0);
-  const [type, setType] = useState<RecurringType | null>(recurring?.type ?? null);
+  const [type, setType] = useState<RecurringType | null>(
+    recurring?.type ?? null,
+  );
   const [name, setName] = useState(recurring?.name ?? "");
-  const [amount, setAmount] = useState(recurring ? String(recurring.amount) : "");
-  const [categoryId, setCategoryId] = useState<string | null>(recurring?.category_id ?? null);
-  const [frequency, setFrequency] = useState<Frequency>(recurring?.frequency ?? "monthly");
-  const [dayOfWeek, setDayOfWeek] = useState(recurring?.day_of_week ?? new Date().getDay());
-  const [dayOfMonth, setDayOfMonth] = useState(recurring?.day_of_month ?? new Date().getDate());
+  const [amount, setAmount] = useState(
+    recurring ? String(recurring.amount) : "",
+  );
+  const [categoryId, setCategoryId] = useState<string | null>(
+    recurring?.category_id ?? null,
+  );
+  const [frequency, setFrequency] = useState<Frequency>(
+    recurring?.frequency ?? "monthly",
+  );
+  const [dayOfWeek, setDayOfWeek] = useState(
+    recurring?.day_of_week ?? new Date().getDay(),
+  );
+  const [dayOfMonth, setDayOfMonth] = useState(
+    recurring?.day_of_month ?? new Date().getDate(),
+  );
   const [autoApply, setAutoApply] = useState(recurring?.auto_apply ?? false);
 
   useEffect(() => {
@@ -372,26 +491,54 @@ function RecurringWizard({
     setMaxReached((prev) => Math.max(prev, next));
   }
 
-  const filteredCategories = categories.filter((category) => category.type === type);
-  const selectedCategory = categories.find((category) => category.id === categoryId);
+  const filteredCategories = categories.filter(
+    (category) => category.type === type,
+  );
+  const selectedCategory = categories.find(
+    (category) => category.id === categoryId,
+  );
 
   return (
     <form action={formAction} className="space-y-4">
       {isEdit && <input type="hidden" name="id" value={recurring.id} />}
       <input type="hidden" name="type" value={type ?? ""} />
       <input type="hidden" name="name" value={name} />
-      <input type="hidden" name="amount" value={Number(amount || "0").toFixed(2)} />
+      <input
+        type="hidden"
+        name="amount"
+        value={Number(amount || "0").toFixed(2)}
+      />
       <input type="hidden" name="category_id" value={categoryId ?? ""} />
       <input type="hidden" name="frequency" value={frequency} />
-      <input type="hidden" name="day_of_week" value={frequency === "weekly" ? dayOfWeek : ""} />
-      <input type="hidden" name="day_of_month" value={frequency === "monthly" ? dayOfMonth : ""} />
+      <input
+        type="hidden"
+        name="day_of_week"
+        value={frequency === "weekly" ? dayOfWeek : ""}
+      />
+      <input
+        type="hidden"
+        name="day_of_month"
+        value={frequency === "monthly" ? dayOfMonth : ""}
+      />
       <input type="hidden" name="auto_apply" value={autoApply ? "on" : ""} />
 
-      <WizardProgress steps={STEP_LABELS} step={step} maxReached={maxReached} onJump={goTo} />
+      <WizardProgress
+        steps={STEP_LABELS}
+        step={step}
+        maxReached={maxReached}
+        onJump={goTo}
+      />
 
-      <WizardStepHeader label={STEP_LABELS[step]} step={step} onBack={() => goTo(step - 1)} />
+      <WizardStepHeader
+        label={STEP_LABELS[step]}
+        step={step}
+        onBack={() => goTo(step - 1)}
+      />
 
-      <div key={step} className="animate-in fade-in-0 slide-in-from-right-2 duration-200">
+      <div
+        key={step}
+        className="animate-in fade-in-0 slide-in-from-right-2 duration-200"
+      >
         {step === 0 && (
           <TypeStep
             value={type}
@@ -402,8 +549,16 @@ function RecurringWizard({
             }}
           />
         )}
-        {step === 1 && <NameStep value={name} onChange={setName} onNext={() => goTo(2)} />}
-        {step === 2 && <AmountStep value={amount} onChange={setAmount} onNext={() => goTo(3)} />}
+        {step === 1 && (
+          <NameStep value={name} onChange={setName} onNext={() => goTo(2)} />
+        )}
+        {step === 2 && (
+          <AmountStep
+            value={amount}
+            onChange={setAmount}
+            onNext={() => goTo(3)}
+          />
+        )}
         {step === 3 && (
           <CategoryStep
             categories={filteredCategories}
@@ -424,7 +579,13 @@ function RecurringWizard({
             onNext={() => goTo(5)}
           />
         )}
-        {step === 5 && <AutomationStep autoApply={autoApply} onChange={setAutoApply} onNext={() => goTo(6)} />}
+        {step === 5 && (
+          <AutomationStep
+            autoApply={autoApply}
+            onChange={setAutoApply}
+            onNext={() => goTo(6)}
+          />
+        )}
         {step === 6 && (
           <ReviewStep
             type={type ?? "expense"}
@@ -478,7 +639,7 @@ export function CreateRecurringDialog({
           }
         >
           <Plus className="size-4" />
-          Nuevo recurrente
+          Nuevo
         </DialogTrigger>
       )}
       <DialogContent>
@@ -486,10 +647,17 @@ export function CreateRecurringDialog({
           <div className="flex items-center gap-2 font-mono text-xs tracking-widest text-ink-muted uppercase">
             {isEdit ? "Editar" : "Nuevo"}
           </div>
-          <DialogTitle>{isEdit ? "Editar recurrente" : "Nuevo recurrente"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar recurrente" : "Nuevo recurrente"}
+          </DialogTitle>
         </DialogHeader>
         {open && (
-          <RecurringWizard categories={categories} onSuccess={() => setOpen(false)} mode={mode} recurring={recurring} />
+          <RecurringWizard
+            categories={categories}
+            onSuccess={() => setOpen(false)}
+            mode={mode}
+            recurring={recurring}
+          />
         )}
       </DialogContent>
     </Dialog>
