@@ -13,12 +13,13 @@ export type CategoryRow = {
   name: string;
   type: "income" | "expense";
   active: boolean;
-  budget_group?: "necesidad" | "deseo" | null;
+  budget_group?: "necesidad" | "deseo" | "ahorro" | null;
 };
 
 const BUDGET_GROUP_LABELS: Record<string, string> = {
   necesidad: "Necesidad",
   deseo: "Deseo",
+  ahorro: "Ahorro/Deuda",
   none: "Sin clasificar",
 };
 
@@ -31,16 +32,17 @@ function BudgetGroupSelect({ category }: { category: CategoryRow }) {
       disabled={isPending}
       onValueChange={(next) => {
         if (!next) return;
-        const value = next === "none" ? null : (next as "necesidad" | "deseo");
+        const value = next === "none" ? null : (next as "necesidad" | "deseo" | "ahorro");
         startTransition(() => updateCategoryBudgetGroup(category.id, value));
       }}
     >
-      <SelectTrigger aria-label={`Grupo 50/30/20 de ${category.name}`} className="h-8 w-34 text-xs">
+      <SelectTrigger aria-label={`Grupo 50/30/20 de ${category.name}`} className="h-8 w-36 text-xs">
         <SelectValue>{(value: string) => BUDGET_GROUP_LABELS[value] ?? value}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="necesidad">Necesidad</SelectItem>
         <SelectItem value="deseo">Deseo</SelectItem>
+        <SelectItem value="ahorro">Ahorro/Deuda</SelectItem>
         <SelectItem value="none">Sin clasificar</SelectItem>
       </SelectContent>
     </Select>

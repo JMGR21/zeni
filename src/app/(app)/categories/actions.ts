@@ -57,7 +57,7 @@ export async function toggleCategoryActive(id: string, active: boolean) {
   revalidatePath("/budget");
 }
 
-export async function updateCategoryBudgetGroup(id: string, budgetGroup: "necesidad" | "deseo" | null) {
+export async function updateCategoryBudgetGroup(id: string, budgetGroup: "necesidad" | "deseo" | "ahorro" | null) {
   const supabase = await createClient();
   const {
     data: { user },

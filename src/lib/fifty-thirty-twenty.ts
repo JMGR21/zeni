@@ -23,10 +23,13 @@ function toISODate(date: Date) {
  * `income = 0` no tiene base sobre la cual calcular porcentajes, así que
  * devuelve `null` en vez de una división por cero.
  *
- * El ahorro/deuda del 20% viene de `dragon_contributions` (abonos reales a
- * Dragones), no de transacciones de gasto categorizadas — y por eso las
- * transacciones de gasto vinculadas a un Dragón (`dragon_id` no nulo) se
- * excluyen de Necesidad/Deseo, para no contar el mismo monto dos veces.
+ * El 20% de Ahorro/Deuda combina dos fuentes: `dragon_contributions`
+ * (abonos reales a Dragones) MÁS las transacciones de gasto en categorías
+ * clasificadas como `budget_group = 'ahorro'` — deudas que el usuario paga
+ * pero no lleva como Dragón (sin seguimiento estricto de saldo/interés).
+ * Las transacciones de gasto vinculadas a un Dragón (`dragon_id` no nulo) se
+ * excluyen de Necesidad/Deseo/Ahorro-por-categoría para no contar el mismo
+ * monto dos veces (ya entra por `dragon_contributions`).
  */
 export async function computeFiftyThirtyTwenty(
   supabase: SupabaseClient,
@@ -58,7 +61,7 @@ export async function computeFiftyThirtyTwenty(
         .select("id, budget_group")
         .eq("user_id", userId)
         .eq("type", "expense")
-        .returns<{ id: string; budget_group: "necesidad" | "deseo" | null }[]>(),
+        .returns<{ id: string; budget_group: "necesidad" | "deseo" | "ahorro" | null }[]>(),
       supabase
         .from("dragon_contributions")
         .select("amount")
@@ -74,15 +77,18 @@ export async function computeFiftyThirtyTwenty(
 
   let necessityAmount = 0;
   let wantAmount = 0;
+  let savingsFromCategoriesAmount = 0;
   let unclassifiedAmount = 0;
   for (const row of expenseRows ?? []) {
     const group = row.category_id ? groupByCategory.get(row.category_id) : undefined;
     if (group === "necesidad") necessityAmount += row.amount;
     else if (group === "deseo") wantAmount += row.amount;
+    else if (group === "ahorro") savingsFromCategoriesAmount += row.amount;
     else unclassifiedAmount += row.amount;
   }
 
-  const savingsAmount = (contributionRows ?? []).reduce((sum, row) => sum + row.amount, 0);
+  const savingsFromContributionsAmount = (contributionRows ?? []).reduce((sum, row) => sum + row.amount, 0);
+  const savingsAmount = savingsFromContributionsAmount + savingsFromCategoriesAmount;
 
   return {
     necessityAmount,
