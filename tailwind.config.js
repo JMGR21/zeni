@@ -31,6 +31,28 @@ module.exports = {
     "dark:bg-rose-500",
     "text-rose-500",
     "dark:text-rose-500",
+    // Segunda excepción a "nunca pases color/colors a Tremor": el
+    // LineChart del simulador de flujo de efectivo (`cashflow-simulator.tsx`)
+    // necesita 2 series (saldo proyectado + línea de referencia en $0), y a
+    // diferencia de BarList/BarChart de una sola serie (que caen a
+    // tremor-brand-* sin pasar `colors`), un LineChart con 2+ categorías sin
+    // `colors` explícito usa la paleta azul/gris por defecto de Tremor
+    // (`themeColorRange`, no mapeada a nuestros tokens) — así que aquí sí
+    // hace falta fijar colores + safelistear, igual que en IncomeExpenseChart.
+    // LineChart usa `stroke-*` (la línea) y `fill-*` (los puntos), no `fill`
+    // para el trazo como BarChart, de ahí el set de clases distinto.
+    "stroke-amber-500",
+    "dark:stroke-amber-500",
+    "fill-amber-500",
+    "dark:fill-amber-500",
+    "bg-amber-500",
+    "dark:bg-amber-500",
+    "stroke-gray-500",
+    "dark:stroke-gray-500",
+    "fill-gray-500",
+    "dark:fill-gray-500",
+    "bg-gray-500",
+    "dark:bg-gray-500",
   ],
   theme: {
     extend: {

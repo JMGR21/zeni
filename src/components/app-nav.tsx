@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { href: "/dragons", label: "Dragones" },
   { href: "/recurring", label: "Recurrentes" },
   { href: "/training", label: "Entrenamiento" },
-  { href: "/instruments/50-30-20", label: "Instrumentos" },
+  { href: "/instruments", label: "Instrumentos" },
   { href: "/achievements", label: "Logros" },
   { href: "/categories", label: "Categorías" },
 ] as const;
