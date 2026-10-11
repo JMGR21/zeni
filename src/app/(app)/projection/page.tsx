@@ -17,6 +17,7 @@ type ProjectionLineRecord = {
   label: string;
   amount: number;
   expected_date: string;
+  category_id: string | null;
   source: "manual" | "budget" | "recurring" | "debt" | "transaction";
   source_ref: string | null;
   included: boolean;
@@ -78,7 +79,7 @@ export default async function ProjectionPage({
     const [{ data: lineData }, { data: transactionData }] = await Promise.all([
       supabase
         .from("projection_lines")
-        .select("id, kind, label, amount, expected_date, source, source_ref, included, categories(name)")
+        .select("id, kind, label, amount, expected_date, category_id, source, source_ref, included, categories(name)")
         .eq("scenario_id", selected.id)
         .order("expected_date")
         .order("sort_order")
@@ -99,6 +100,7 @@ export default async function ProjectionPage({
       label: line.label,
       amount: line.amount,
       expected_date: line.expected_date,
+      category_id: line.category_id,
       source: line.source,
       included: line.included,
       category_name: line.categories?.name ?? null,
