@@ -219,6 +219,40 @@ export async function addProjectionLine(
   return { success: true };
 }
 
+export async function updateProjectionLine(
+  id: string,
+  fields: { label: string; amount: number; expectedDate: string; categoryId: string | null },
+): Promise<{ error?: string }> {
+  if (!fields.label.trim()) return { error: "Ingresa una etiqueta." };
+  if (!Number.isFinite(fields.amount) || fields.amount <= 0) return { error: "Ingresa un monto válido." };
+  if (!fields.expectedDate) return { error: "Selecciona una fecha." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  // Editar una línea importada desde un movimiento real o generada
+  // automáticamente solo ajusta la COPIA que vive en el escenario — nunca
+  // toca la transacción/recurrente/deuda de origen, mismo principio que
+  // "importar" en `addProjectionLinesFromTransactions`.
+  const { error } = await supabase
+    .from("projection_lines")
+    .update({
+      label: fields.label.trim(),
+      amount: fields.amount,
+      expected_date: fields.expectedDate,
+      category_id: fields.categoryId,
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/projection");
+  return {};
+}
+
 type ImportableTransaction = {
   id: string;
   type: "income" | "expense";

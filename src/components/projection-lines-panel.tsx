@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   addProjectionLine,
   deleteProjectionLine,
   toggleProjectionLineIncluded,
+  updateProjectionLine,
   type ProjectionActionState,
 } from "@/app/(app)/projection/actions";
 import { AddFromTransactionsDialog, type ImportableTransaction } from "@/components/add-from-transactions-dialog";
@@ -23,6 +24,7 @@ export type ProjectionLineRow = {
   label: string;
   amount: number;
   expected_date: string;
+  category_id: string | null;
   source: "manual" | "budget" | "recurring" | "debt" | "transaction";
   included: boolean;
   category_name: string | null;
@@ -49,8 +51,109 @@ const SOURCE_LABELS: Record<ProjectionLineRow["source"], string> = {
 
 const initialState: ProjectionActionState = {};
 
-function LineRow({ line }: { line: ProjectionLineRow }) {
+// Estado local inicializado desde `line` solo al montar — sin un efecto de
+// resincronización (mismo motivo que `ScenarioSettings`): el llamador
+// monta este componente con `key={line.id}` cuando entra a modo edición,
+// así que un remount real ocurre si cambia de línea.
+function LineEditRow({
+  line,
+  categories,
+  onCancel,
+  onSaved,
+}: {
+  line: ProjectionLineRow;
+  categories: ProjectionCategoryOption[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [label, setLabel] = useState(line.label);
+  const [amount, setAmount] = useState(String(line.amount));
+  const [expectedDate, setExpectedDate] = useState(line.expected_date);
+  const [categoryId, setCategoryId] = useState<string | null>(line.category_id);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const matchingCategories = categories.filter((category) => category.type === line.kind);
+
+  function handleSave() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateProjectionLine(line.id, {
+        label,
+        amount: Number(amount),
+        expectedDate,
+        categoryId,
+      });
+      if (result.error) setError(result.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <div className="border-b border-ink-muted/10 py-3 last:border-b-0">
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="Etiqueta"
+          className="h-8 text-sm"
+        />
+        <Input
+          type="number"
+          step="0.01"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          placeholder="Monto"
+          className="h-8 font-mono text-sm"
+        />
+        <Input
+          type="date"
+          value={expectedDate}
+          onChange={(event) => setExpectedDate(event.target.value)}
+          className="h-8 text-sm"
+        />
+        <Select value={categoryId ?? ""} onValueChange={(next) => setCategoryId(next || null)}>
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue placeholder="Sin categoría" />
+          </SelectTrigger>
+          <SelectContent>
+            {matchingCategories.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="button" size="sm" disabled={isPending} onClick={handleSave} className="gap-1.5">
+          {isPending && <Loader2 className="size-3.5 animate-spin" />}
+          Guardar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LineRow({ line, categories }: { line: ProjectionLineRow; categories: ProjectionCategoryOption[] }) {
+  const [isPending, startTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
+
+  if (isEditing) {
+    return (
+      <LineEditRow
+        key={line.id}
+        line={line}
+        categories={categories}
+        onCancel={() => setIsEditing(false)}
+        onSaved={() => setIsEditing(false)}
+      />
+    );
+  }
 
   return (
     <div
@@ -65,7 +168,7 @@ function LineRow({ line }: { line: ProjectionLineRow }) {
           {line.category_name ? ` · ${line.category_name}` : ""}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         <span className={`font-mono text-sm ${line.kind === "income" ? "text-emerald-400" : "text-red-400"}`}>
           {line.kind === "income" ? "+" : "-"}
           {currencyFormatter.format(line.amount)}
@@ -76,6 +179,15 @@ function LineRow({ line }: { line: ProjectionLineRow }) {
           aria-label={`${line.included ? "Excluir" : "Incluir"} ${line.label}`}
           onCheckedChange={(checked) => startTransition(() => toggleProjectionLineIncluded(line.id, checked))}
         />
+        <button
+          type="button"
+          aria-label={`Editar ${line.label}`}
+          disabled={isPending}
+          onClick={() => setIsEditing(true)}
+          className="flex size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-ink-muted/10 hover:text-ink disabled:opacity-40"
+        >
+          <Pencil className="size-3.5" />
+        </button>
         <button
           type="button"
           aria-label={`Eliminar ${line.label}`}
@@ -90,7 +202,15 @@ function LineRow({ line }: { line: ProjectionLineRow }) {
   );
 }
 
-function LineGroup({ title, lines }: { title: string; lines: ProjectionLineRow[] }) {
+function LineGroup({
+  title,
+  lines,
+  categories,
+}: {
+  title: string;
+  lines: ProjectionLineRow[];
+  categories: ProjectionCategoryOption[];
+}) {
   const total = lines.filter((line) => line.included).reduce((sum, line) => sum + line.amount, 0);
 
   return (
@@ -101,7 +221,7 @@ function LineGroup({ title, lines }: { title: string; lines: ProjectionLineRow[]
       </div>
       <div className="mt-3 rounded-xl border border-ink-muted/15 bg-void/40 px-4">
         {lines.length > 0 ? (
-          lines.map((line) => <LineRow key={line.id} line={line} />)
+          lines.map((line) => <LineRow key={line.id} line={line} categories={categories} />)
         ) : (
           <p className="py-3 text-sm text-ink-muted">Sin líneas.</p>
         )}
@@ -235,8 +355,8 @@ export function ProjectionLinesPanel({
         <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">Líneas</h2>
         <AddFromTransactionsDialog scenarioId={scenarioId} transactions={importableTransactions} />
       </div>
-      <LineGroup title="Ingresos" lines={incomeLines} />
-      <LineGroup title="Gastos" lines={expenseLines} />
+      <LineGroup title="Ingresos" lines={incomeLines} categories={categories} />
+      <LineGroup title="Gastos" lines={expenseLines} categories={categories} />
       <AddLineForm
         key={formKey}
         scenarioId={scenarioId}
