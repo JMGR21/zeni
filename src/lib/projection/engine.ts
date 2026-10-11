@@ -2,7 +2,8 @@ export type ProjectionLineKind = "income" | "expense";
 
 export type ProjectionLineInput = {
   kind: ProjectionLineKind;
-  amount: number; // siempre positivo, en moneda decimal; el signo lo da `kind`
+  amount: number; // presupuesto — siempre positivo, en moneda decimal; el signo lo da `kind`
+  actualAmount?: number | null; // gasto/ingreso real; null/undefined = "todavía no sucede", no "ya sucedió por $0"
   expectedDate: Date;
   included: boolean;
 };
@@ -24,11 +25,15 @@ export type ProjectionResult = {
   totalExpense: number;
   projectedFinal: number;
   buffer: number;
-  available: number;
+  available: number; // "Libre final" — disponible proyectado con el presupuesto completo del mes
   dailyBalance: DailyBalancePoint[];
   firstNegativeDate: Date | null;
   firstBelowBufferDate: Date | null;
   dailySpendAvailable: number | null; // null si `today` no cae dentro del mes evaluado
+  totalIncomeActual: number;
+  totalExpenseActual: number;
+  projectedFinalActual: number;
+  availableActual: number; // "Libre actual" — mismo colchón que `available`, pero con lo YA ocurrido (líneas sin `actualAmount` no suman)
 };
 
 function toCents(amount: number): number {
@@ -55,16 +60,30 @@ export function computeProjection(input: ProjectionScenarioInput, today: Date = 
   const openingBalanceCents = toCents(openingBalance);
   let totalIncomeCents = 0;
   let totalExpenseCents = 0;
+  let totalIncomeActualCents = 0;
+  let totalExpenseActualCents = 0;
   for (const line of includedLines) {
-    if (line.kind === "income") totalIncomeCents += toCents(line.amount);
-    else totalExpenseCents += toCents(line.amount);
+    const actualCents = line.actualAmount != null ? toCents(line.actualAmount) : 0;
+    if (line.kind === "income") {
+      totalIncomeCents += toCents(line.amount);
+      totalIncomeActualCents += actualCents;
+    } else {
+      totalExpenseCents += toCents(line.amount);
+      totalExpenseActualCents += actualCents;
+    }
   }
 
   const projectedFinalCents = openingBalanceCents + totalIncomeCents - totalExpenseCents;
   // El colchón es un solo corte para todo el mes (porcentaje del gasto total
-  // proyectado), no un valor que cambia día a día.
+  // proyectado), no un valor que cambia día a día — y es el MISMO colchón
+  // para "Libre final" y "Libre actual" (es un margen de seguridad fijo
+  // sobre el plan completo, no algo que deba encogerse solo porque todavía
+  // no se ha gastado todo lo presupuestado).
   const bufferCents = Math.round((totalExpenseCents * bufferPercent) / 100);
   const availableCents = projectedFinalCents - bufferCents;
+
+  const projectedFinalActualCents = openingBalanceCents + totalIncomeActualCents - totalExpenseActualCents;
+  const availableActualCents = projectedFinalActualCents - bufferCents;
 
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -107,5 +126,9 @@ export function computeProjection(input: ProjectionScenarioInput, today: Date = 
     firstNegativeDate,
     firstBelowBufferDate,
     dailySpendAvailable,
+    totalIncomeActual: fromCents(totalIncomeActualCents),
+    totalExpenseActual: fromCents(totalExpenseActualCents),
+    projectedFinalActual: fromCents(projectedFinalActualCents),
+    availableActual: fromCents(availableActualCents),
   };
 }

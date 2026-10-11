@@ -253,6 +253,35 @@ export async function updateProjectionLine(
   return {};
 }
 
+// Separado de `updateProjectionLine`: el monto real se actualiza con mucha
+// más frecuencia conforme avanza el mes (sin entrar al formulario completo
+// de edición), así que es un guardado directo en la propia fila, mismo
+// patrón que `toggleProjectionLineIncluded`.
+export async function updateProjectionLineActualAmount(
+  id: string,
+  actualAmount: number | null,
+): Promise<{ error?: string }> {
+  if (actualAmount !== null && (!Number.isFinite(actualAmount) || actualAmount < 0)) {
+    return { error: "Ingresa un monto real válido." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sesión no válida. Vuelve a iniciar sesión." };
+
+  const { error } = await supabase
+    .from("projection_lines")
+    .update({ actual_amount: actualAmount })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/projection");
+  return {};
+}
+
 type ImportableTransaction = {
   id: string;
   type: "income" | "expense";
@@ -301,6 +330,9 @@ export async function addProjectionLinesFromTransactions(
     kind: transaction.type,
     label: transaction.description || transaction.categories?.name || "Movimiento",
     amount: transaction.amount,
+    // Un movimiento importado YA ocurrió — su "real" es el mismo monto, no
+    // `null` ("todavía no sucede"), a diferencia de una línea manual/futura.
+    actual_amount: transaction.amount,
     expected_date: transaction.occurred_on,
     category_id: transaction.category_id,
     source: "transaction",
