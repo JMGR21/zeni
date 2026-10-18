@@ -165,3 +165,91 @@ export async function wasMonthWithinBudget(
 
   return totalBudget > 0 && totalSpent <= totalBudget;
 }
+
+export type HistoryBucket = { label: string; total: number; byCategory: Record<string, number> };
+export type SpendingHistory = { week: HistoryBucket[]; month: HistoryBucket[]; year: HistoryBucket[] };
+
+const WEEK_BUCKETS = 12;
+const MONTH_BUCKETS = 12;
+const YEAR_BUCKETS = 5;
+
+// Lunes de la semana que contiene `date` — igual criterio ISO que el resto
+// del proyecto usa implícitamente para "semana" (no se usó antes, primer
+// lugar que necesita agrupar por semana).
+function mondayOf(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+/**
+ * Histórico de gasto por categoría en 3 granularidades a la vez (semana,
+ * mes, año) — una sola consulta sobre la ventana más amplia (años) y
+ * agregación en memoria, mismo patrón que `getFiftyThirtyTwentyHistory`.
+ * Cada bucket trae el total (todo el gasto, incluido sin categoría) y el
+ * desglose por categoría (`byCategory`, sin incluir transacciones sin
+ * categoría — mismo criterio que el resto de los mapas de gasto por
+ * categoría del proyecto).
+ */
+export async function getCategorySpendingHistory(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<SpendingHistory> {
+  const now = new Date();
+  const earliestStart = toISODate(new Date(now.getFullYear() - (YEAR_BUCKETS - 1), 0, 1));
+  const rangeEnd = toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+
+  const { data: rows } = await supabase
+    .from("transactions")
+    .select("category_id, amount, occurred_on")
+    .eq("user_id", userId)
+    .eq("type", "expense")
+    .gte("occurred_on", earliestStart)
+    .lt("occurred_on", rangeEnd)
+    .returns<{ category_id: string | null; amount: number; occurred_on: string }[]>();
+
+  const monthBuckets = new Map<string, HistoryBucket>();
+  for (let i = 0; i < MONTH_BUCKETS; i++) {
+    const start = toISODate(monthStart(now, MONTH_BUCKETS - 1 - i));
+    monthBuckets.set(start, { label: start, total: 0, byCategory: {} });
+  }
+
+  const currentWeekStart = mondayOf(now);
+  const weekBuckets = new Map<string, HistoryBucket>();
+  for (let i = 0; i < WEEK_BUCKETS; i++) {
+    const start = new Date(currentWeekStart);
+    start.setDate(start.getDate() - 7 * (WEEK_BUCKETS - 1 - i));
+    const key = toISODate(start);
+    weekBuckets.set(key, { label: key, total: 0, byCategory: {} });
+  }
+
+  const yearBuckets = new Map<string, HistoryBucket>();
+  for (let i = 0; i < YEAR_BUCKETS; i++) {
+    const year = String(now.getFullYear() - (YEAR_BUCKETS - 1) + i);
+    yearBuckets.set(year, { label: year, total: 0, byCategory: {} });
+  }
+
+  for (const row of rows ?? []) {
+    const occurred = new Date(`${row.occurred_on}T00:00:00`);
+
+    const monthBucket = monthBuckets.get(toISODate(new Date(occurred.getFullYear(), occurred.getMonth(), 1)));
+    const weekBucket = weekBuckets.get(toISODate(mondayOf(occurred)));
+    const yearBucket = yearBuckets.get(String(occurred.getFullYear()));
+
+    for (const bucket of [monthBucket, weekBucket, yearBucket]) {
+      if (!bucket) continue;
+      bucket.total += row.amount;
+      if (row.category_id) {
+        bucket.byCategory[row.category_id] = (bucket.byCategory[row.category_id] ?? 0) + row.amount;
+      }
+    }
+  }
+
+  return {
+    week: Array.from(weekBuckets.values()),
+    month: Array.from(monthBuckets.values()),
+    year: Array.from(yearBuckets.values()),
+  };
+}

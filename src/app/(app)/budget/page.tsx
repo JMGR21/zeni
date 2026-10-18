@@ -1,25 +1,49 @@
 import { GiWeightLiftingUp } from "react-icons/gi";
-import { BudgetCategoryCard } from "@/components/budget-category-card";
-import { BudgetSummary } from "@/components/budget-summary";
-import { getSuggestedBudget, type BudgetCategory } from "@/lib/budget";
+import { BudgetPageClient } from "@/components/budget-page-client";
+import { MonthSelector } from "@/components/month-selector";
+import {
+  getCategorySpendingHistory,
+  getSuggestedBudget,
+  resolveBudgetedAmount,
+  type BudgetCategory,
+} from "@/lib/budget";
+import { computePeriodStart, parsePeriodISODate, toISODate } from "@/lib/period";
 import { createClient } from "@/lib/supabase/server";
 
-function monthRange(now: Date) {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function BudgetPage() {
+function monthRange(monthStart: Date) {
+  const start = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
+  const end = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+  return { start: toISODate(start), end: toISODate(end) };
+}
+
+export default async function BudgetPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { start, end } = monthRange(new Date());
+  const currentMonthStart = computePeriodStart(new Date(), 1);
+  const monthParam = firstParam(params.month);
+  const requestedMonth = monthParam && ISO_DATE_RE.test(monthParam) ? parsePeriodISODate(monthParam) : currentMonthStart;
+  // No tiene sentido navegar a un mes futuro — no hay gasto real que mostrar.
+  const selectedMonth = requestedMonth.getTime() > currentMonthStart.getTime() ? currentMonthStart : requestedMonth;
+  const isCurrentMonth = toISODate(selectedMonth) === toISODate(currentMonthStart);
 
-  const [{ data: categories }, { data: budgets }, { data: monthExpenses }] = await Promise.all([
+  const { start, end } = monthRange(selectedMonth);
+
+  const [{ data: categories }, { data: budgets }, { data: monthExpenses }, history] = await Promise.all([
     supabase
       .from("categories")
       .select("id, name")
@@ -35,6 +59,7 @@ export default async function BudgetPage() {
       .gte("occurred_on", start)
       .lt("occurred_on", end)
       .returns<{ category_id: string | null; amount: number }[]>(),
+    getCategorySpendingHistory(supabase, user.id),
   ]);
 
   const customAmountByCategory = new Map((budgets ?? []).map((budget) => [budget.category_id, budget.amount]));
@@ -53,9 +78,17 @@ export default async function BudgetPage() {
       name: category.name,
       spent: spentByCategory.get(category.id) ?? 0,
       customAmount: customAmountByCategory.get(category.id) ?? null,
-      suggestion: await getSuggestedBudget(supabase, user.id, category.id),
+      suggestion: await getSuggestedBudget(supabase, user.id, category.id, selectedMonth),
     })),
   );
+
+  const budgetedByCategory: Record<string, number | null> = {};
+  let totalBudgeted = 0;
+  for (const category of budgetCategories) {
+    const budgeted = resolveBudgetedAmount(category);
+    budgetedByCategory[category.id] = budgeted;
+    if (budgeted !== null) totalBudgeted += budgeted;
+  }
 
   return (
     <section className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -66,27 +99,20 @@ export default async function BudgetPage() {
       <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Presupuesto</h1>
       <p className="mt-1 text-sm text-ink-muted">
         Cada categoría entrena bajo su propio límite de gravedad, calculado a partir de tu gasto real de los
-        últimos 3 meses. Personaliza el límite cuando quieras.
+        últimos 3 meses. Personaliza el límite cuando quieras, o navega meses anteriores para ver cómo entrenaste.
       </p>
 
-      <div className="mt-8">
-        <BudgetSummary categories={budgetCategories} />
+      <div className="mt-6">
+        <MonthSelector monthISO={toISODate(selectedMonth)} isCurrentMonth={isCurrentMonth} />
       </div>
 
-      <div className="mt-8">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
-          Categorías de gasto
-        </h2>
-        {budgetCategories.length > 0 ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {budgetCategories.map((category) => (
-              <BudgetCategoryCard key={category.id} category={category} />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-ink-muted">Aún no tienes categorías de gasto.</p>
-        )}
-      </div>
+      <BudgetPageClient
+        categories={budgetCategories}
+        history={history}
+        historyCategories={categories ?? []}
+        budgetedByCategory={budgetedByCategory}
+        totalBudgeted={totalBudgeted}
+      />
     </section>
   );
 }

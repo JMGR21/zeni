@@ -10,17 +10,19 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-// Navegador de mes calendario para el detalle del instrumento — a
-// diferencia de `PeriodSelector` (Fase 10), este instrumento siempre opera
-// sobre mes calendario real (día 1 a fin de mes, ver nota en
-// `computeFiftyThirtyTwenty`), así que reutiliza `shiftPeriodStart` con
-// `startDay = 1` en vez de duplicar la aritmética de meses.
-export function FiftyThirtyTwentyMonthSelector({
+// Navegador de mes calendario genérico vía query param (`startDay = 1`,
+// siempre mes calendario real) — usado por cualquier pantalla que
+// necesite navegar mes a mes sin repetir esta lógica (Regla 50/30/20,
+// Presupuesto). `paramName` permite más de un selector de fecha en la
+// misma página sin pisarse.
+export function MonthSelector({
   monthISO,
   isCurrentMonth,
+  paramName = "month",
 }: {
   monthISO: string;
   isCurrentMonth: boolean;
+  paramName?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -29,13 +31,13 @@ export function FiftyThirtyTwentyMonthSelector({
   function goToOffset(offset: number) {
     const next = shiftPeriodStart(parsePeriodISODate(monthISO), 1, offset);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("month", toISODate(next));
+    params.set(paramName, toISODate(next));
     router.push(`${pathname}?${params.toString()}`);
   }
 
   function goToCurrentMonth() {
     const params = new URLSearchParams(searchParams.toString());
-    params.delete("month");
+    params.delete(paramName);
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }

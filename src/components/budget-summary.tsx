@@ -8,7 +8,13 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
-export function BudgetSummary({ categories }: { categories: BudgetCategory[] }) {
+export function BudgetSummary({
+  categories,
+  showLimits = true,
+}: {
+  categories: BudgetCategory[];
+  showLimits?: boolean;
+}) {
   // Solo cuentan las categorías con un monto real (sugerido o personalizado):
   // si sumáramos gasto de categorías sin presupuesto, el % dejaría de cuadrar
   // con el total de presupuesto de arriba.
@@ -24,6 +30,18 @@ export function BudgetSummary({ categories }: { categories: BudgetCategory[] }) 
   );
 
   const { totalBudget, totalSpent } = withBudget;
+
+  if (!showLimits) {
+    const totalSpentAll = categories.reduce((sum, category) => sum + category.spent, 0);
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-ink-muted/15 bg-void/40 p-5">
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-ki-awakening/60" />
+        <p className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Gasto total del mes</p>
+        <p className="mt-2 font-mono text-4xl text-ink">{currencyFormatter.format(totalSpentAll)}</p>
+      </div>
+    );
+  }
+
   const hasBudget = totalBudget > 0;
   const remaining = totalBudget - totalSpent;
   const overBudget = hasBudget && totalSpent > totalBudget;
