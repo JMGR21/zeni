@@ -13,13 +13,29 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
-export function BudgetCategoryCard({ category }: { category: BudgetCategory }) {
+export function BudgetCategoryCard({
+  category,
+  showLimit = true,
+}: {
+  category: BudgetCategory;
+  showLimit?: boolean;
+}) {
   const [isResetting, startReset] = useTransition();
 
   const isCustom = category.customAmount !== null;
   const budgeted = resolveBudgetedAmount(category);
   const overBudget = budgeted !== null && category.spent > budgeted;
   const progressRatio = budgeted ? category.spent / budgeted : 0;
+
+  if (!showLimit) {
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-ink-muted/15 bg-void/40 p-4">
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-ki-awakening/60" />
+        <p className="text-sm font-medium text-ink">{category.name}</p>
+        <p className="mt-1 font-mono text-lg text-ink">{currencyFormatter.format(category.spent)}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-ink-muted/15 bg-void/40 p-4">

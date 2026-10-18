@@ -2,7 +2,7 @@ import { Scale } from "lucide-react";
 import Link from "next/link";
 import { FiftyThirtyTwentyBars } from "@/components/fifty-thirty-twenty-bars";
 import { FiftyThirtyTwentyHistoryChart } from "@/components/fifty-thirty-twenty-history-chart";
-import { FiftyThirtyTwentyMonthSelector } from "@/components/fifty-thirty-twenty-month-selector";
+import { MonthSelector } from "@/components/month-selector";
 import { computeFiftyThirtyTwenty, getFiftyThirtyTwentyHistory } from "@/lib/fifty-thirty-twenty";
 import { computePeriodStart, parsePeriodISODate, toISODate } from "@/lib/period";
 import { createClient } from "@/lib/supabase/server";
@@ -59,7 +59,7 @@ export default async function FiftyThirtyTwentyPage({
         <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">
           Detalle del mes
         </h2>
-        <FiftyThirtyTwentyMonthSelector monthISO={toISODate(selectedMonth)} isCurrentMonth={isCurrentMonth} />
+        <MonthSelector monthISO={toISODate(selectedMonth)} isCurrentMonth={isCurrentMonth} />
       </div>
       <div className="mt-4 rounded-xl border border-ink-muted/15 bg-void/40 p-5">
         {result ? (
