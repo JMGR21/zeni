@@ -203,3 +203,39 @@
     opacity: 1;
   }
 }
+
+/* Scrollbar delgada y temática (en vez de la nativa del navegador) para
+   elementos con scroll propio que no son de página completa — por ahora
+   solo el textarea del chat asistente, que sí puede llegar a scrollear al
+   tope de `MAX_TEXTAREA_HEIGHT`. */
+.themed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-ink-muted) 40%, transparent) transparent;
+}
+.themed-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--color-ink-muted) 40%, transparent);
+  border-radius: 999px;
+}
+.themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--color-ink-muted) 60%, transparent);
+}
+
+/* Indicador de "escribiendo" del chat asistente (fase 15). */
+@keyframes chat-typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
