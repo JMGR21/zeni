@@ -1,21 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
-  addProjectionLine,
   deleteProjectionLine,
   toggleProjectionLineIncluded,
   updateProjectionLine,
   updateProjectionLineActualAmount,
-  type ProjectionActionState,
 } from "@/app/(app)/projection/actions";
 import { AddFromTransactionsDialog, type ImportableTransaction } from "@/components/add-from-transactions-dialog";
+import { AddProjectionLineDialog } from "@/components/add-projection-line-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
@@ -50,8 +46,6 @@ const SOURCE_LABELS: Record<ProjectionLineRow["source"], string> = {
   debt: "Deuda",
   transaction: "Movimiento real",
 };
-
-const initialState: ProjectionActionState = {};
 
 // Estado local inicializado desde `line` solo al montar — sin un efecto de
 // resincronización (mismo motivo que `ScenarioSettings`): el llamador
@@ -333,107 +327,6 @@ function CategoryBreakdown({ lines }: { lines: ProjectionLineRow[] }) {
   );
 }
 
-function AddLineSubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="sm" disabled={pending} className="w-full gap-1.5 sm:w-auto">
-      <Plus className="size-3.5" />
-      Agregar línea
-    </Button>
-  );
-}
-
-function AddLineForm({
-  scenarioId,
-  categories,
-  onAdded,
-}: {
-  scenarioId: string;
-  categories: ProjectionCategoryOption[];
-  onAdded: () => void;
-}) {
-  const [state, formAction] = useActionState(addProjectionLine, initialState);
-  const formRef = useRef<HTMLFormElement>(null);
-  const [kind, setKind] = useState<"income" | "expense">("expense");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (state.success) {
-      formRef.current?.reset();
-      onAdded();
-    }
-  }, [state.success, onAdded]);
-
-  const matchingCategories = categories.filter((category) => category.type === kind);
-
-  return (
-    <form ref={formRef} action={formAction} className="rounded-xl border border-ink-muted/15 bg-void/40 p-4">
-      <h3 className="font-mono text-xs tracking-widest text-ink-muted uppercase">Agregar línea manual</h3>
-      <input type="hidden" name="scenario_id" value={scenarioId} />
-      <input type="hidden" name="kind" value={kind} />
-      <input type="hidden" name="category_id" value={categoryId ?? ""} />
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div>
-          <Label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Tipo</Label>
-          <Select value={kind} onValueChange={(next) => next && setKind(next as "income" | "expense")}>
-            <SelectTrigger className="mt-1.5 h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="expense">Gasto</SelectItem>
-              <SelectItem value="income">Ingreso</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="line-label" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
-            Etiqueta
-          </Label>
-          <Input id="line-label" name="label" placeholder="Ej. Renta" className="mt-1.5 h-9 text-sm" />
-        </div>
-        <div>
-          <Label htmlFor="line-amount" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
-            Monto
-          </Label>
-          <Input
-            id="line-amount"
-            name="amount"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            className="mt-1.5 h-9 font-mono text-sm"
-          />
-        </div>
-        <div>
-          <Label htmlFor="line-date" className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">
-            Fecha
-          </Label>
-          <Input id="line-date" name="expected_date" type="date" className="mt-1.5 h-9 text-sm" />
-        </div>
-        <div>
-          <Label className="font-mono text-[11px] tracking-widest text-ink-muted uppercase">Categoría</Label>
-          <Select value={categoryId ?? ""} onValueChange={(next) => setCategoryId(next || null)}>
-            <SelectTrigger className="mt-1.5 h-9 text-sm">
-              <SelectValue placeholder="Sin categoría" />
-            </SelectTrigger>
-            <SelectContent>
-              {matchingCategories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-3">
-        {state.error ? <p className="text-xs text-destructive">{state.error}</p> : <span />}
-        <AddLineSubmitButton />
-      </div>
-    </form>
-  );
-}
-
 export function ProjectionLinesPanel({
   scenarioId,
   lines,
@@ -447,26 +340,19 @@ export function ProjectionLinesPanel({
 }) {
   const incomeLines = lines.filter((line) => line.kind === "income");
   const expenseLines = lines.filter((line) => line.kind === "expense");
-  // Incrementar `formKey` remonta `AddLineForm`, lo que reinicia su estado
-  // local (tipo/categoría) tras un alta exitosa sin resincronizarlo desde
-  // un efecto (ver nota de `ScenarioSettings` en projection-scenario-panel).
-  const [formKey, setFormKey] = useState(0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-muted">Líneas</h2>
-        <AddFromTransactionsDialog scenarioId={scenarioId} transactions={importableTransactions} />
+        <div className="flex items-center gap-2">
+          <AddFromTransactionsDialog scenarioId={scenarioId} transactions={importableTransactions} />
+          <AddProjectionLineDialog scenarioId={scenarioId} categories={categories} />
+        </div>
       </div>
       <LineGroup title="Ingresos" lines={incomeLines} categories={categories} />
       <LineGroup title="Gastos" lines={expenseLines} categories={categories} />
       <CategoryBreakdown lines={expenseLines} />
-      <AddLineForm
-        key={formKey}
-        scenarioId={scenarioId}
-        categories={categories}
-        onAdded={() => setFormKey((k) => k + 1)}
-      />
     </div>
   );
 }
