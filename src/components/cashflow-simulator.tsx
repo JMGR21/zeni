@@ -7,6 +7,7 @@ import { cn } from "cn";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { runCashflowSimulation, type SimulationInput } from "@/lib/cashflow-simulation";
+import { useRegisterSimulatorInput } from "@/lib/chat/simulator-context";
 
 type BaseSimulationInput = Omit<SimulationInput, "horizonMonths">;
 
@@ -107,6 +108,15 @@ export function CashflowSimulator({ baseInput }: { baseInput: BaseSimulationInpu
     };
     return runCashflowSimulation(input);
   }, [baseInput, horizonMonths, recurringEnabled, weeklyDebtEnabled, otherDebtEnabled, savingsEnabled, savingsAmount]);
+
+  useRegisterSimulatorInput({
+    horizonMonths,
+    recurringEnabled,
+    weeklyDebtEnabled,
+    otherDebtEnabled,
+    savingsEnabled,
+    savingsAmount,
+  });
 
   const chartData = result.months.map((month) => ({
     mes: `Mes ${month.monthIndex + 1}`,
